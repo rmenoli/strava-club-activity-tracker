@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+  <body>
+    <h2>Activities for Athlete {{ athlete_id }}</h2>
+    <a href="/logout">Logout</a> |
+    <a href="/download">Download CSV</a>
+    <table border="1">
+      <tr>
+        {% for col in activities[0].keys() %}
+          <th>{{ col }}</th>
+        {% endfor %}
+      </tr>
+      {% for row in activities %}
+        <tr>
+          {% for col, val in row.items() %}
+            <td>{{ val }}</td>
+          {% endfor %}
+        </tr>
+      {% endfor %}
+    </table>
+  </body>
+</html>

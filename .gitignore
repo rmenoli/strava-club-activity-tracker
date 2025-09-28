@@ -1,0 +1,45 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+#secrets
+.env
+.env.*
+
+# IDE files
+.vscode/
+.idea/
+*.iml
+*.sublime-project
+*.sublime-workspace
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+*.log
+npm-debug.log*
+
+# DB files
+*.sqlite3
+*.db
+*.csv
+*.tsv
+*.json
+*.ndjson
+*.db-journal
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.bak
+*.backup
+*.tar.gz
+*.zip
+
