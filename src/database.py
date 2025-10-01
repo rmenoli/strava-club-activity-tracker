@@ -168,21 +168,19 @@ class StravaDatabase:
     def get_activities(self, athlete_id: str, limit: int = None) -> List[Dict]:
         """Get activities for an athlete from database."""
         with self.get_connection() as conn:
-            query = """
+            query = f"""
                 SELECT activity_id, name, type, start_date, distance, 
                        moving_time, elapsed_time, total_elevation_gain,
                        average_speed, max_speed, raw_data
                 FROM activities 
-                WHERE athlete_id = ? 
+                WHERE athlete_id = {athlete_id}
                 ORDER BY start_date DESC
             """
-            params = [athlete_id]
 
             if limit:
-                query += " LIMIT ?"
-                params.append(limit)
+                query += f" LIMIT {limit}"
 
-            cursor = conn.execute(query, params)
+            cursor = conn.execute(query)
             activities = []
 
             for row in cursor.fetchall():

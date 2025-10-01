@@ -43,3 +43,5 @@ npm-debug.log*
 *.tar.gz
 *.zip
 
+# Jupyter Notebook files
+*.ipynb_checkpoints/
