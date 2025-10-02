@@ -6,16 +6,18 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from src.database import StravaDatabase
+from src.admin_database import AdminDatabase
 from src.store_token import load_tokens, save_tokens
 from src.strava_client import StravaClient
+from src.strava_data_database import StravaDataDatabase
 from src.sync_service import ActivitySyncService
 
 load_dotenv()
 
 # Initialize database and sync service
-db = StravaDatabase()
-sync_service = ActivitySyncService(db)
+admin_db = AdminDatabase()
+data_db = StravaDataDatabase()
+sync_service = ActivitySyncService(data_db)
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
@@ -42,8 +44,8 @@ async def index(request: Request):
     if athlete_id:
         try:
             # Get activities from database
-            activities = db.get_activities_filtered(
-                athlete_id, limit=100, activity_type="Run"
+            activities = data_db.get_activities_filtered(
+                athlete_id, admin_db, limit=100, activity_type="Run"
             )  # Limit for performance
 
             if activities:
@@ -112,7 +114,7 @@ async def callback(request: Request, code: str):
     print(f"Session set with athlete_id: {request.session.get('athlete_id')}")
 
     # Register athlete in database (upsert)
-    db.upsert_athlete(athlete_id)
+    data_db.upsert_athlete(athlete_id)
 
     # Smart sync: only sync if needed
     try:
@@ -167,7 +169,7 @@ async def download_csv(request: Request):
         return RedirectResponse("/login")
 
     # Get activities from database
-    activities = db.get_activities(athlete_id)
+    activities = data_db.get_activities(athlete_id)
 
     if not activities:
         return HTMLResponse("<h3>No activities to download</h3>")
@@ -208,7 +210,7 @@ async def admin_dashboard(request: Request):
     """Admin dashboard showing all athletes (for development)."""
     from datetime import datetime
 
-    athletes = db.get_all_athletes()
+    athletes = data_db.get_all_athletes()
 
     # Add sync status calculation for each athlete
     for athlete in athletes:
@@ -241,8 +243,8 @@ async def admin_dashboard(request: Request):
 @app.get("/admin/settings")
 async def admin_settings(request: Request):
     """Admin settings page for configuring location filters."""
-    settings = db.get_all_settings()
-    location_settings = db.get_location_settings()
+    settings = admin_db.get_all_settings()
+    location_settings = admin_db.get_location_settings()
 
     return templates.TemplateResponse(
         "admin_settings.html",
@@ -268,7 +270,7 @@ async def update_location_settings(request: Request):
         if not (0.1 <= radius_km <= 50):
             raise ValueError("Radius must be between 0.1 and 50 km")
 
-        db.update_location_settings(latitude, longitude, radius_km)
+        admin_db.update_location_settings(latitude, longitude, radius_km)
 
         return HTMLResponse(f"""
             <h3>✅ Location settings updated successfully!</h3>
@@ -288,14 +290,14 @@ async def update_location_settings(request: Request):
 @app.get("/api/location-settings")
 async def get_location_settings():
     """API endpoint to get current location settings."""
-    return db.get_location_settings()
+    return admin_db.get_location_settings()
 
 
 @app.get("/admin/date-filters")
 async def admin_date_filters(request: Request):
     """Admin page for managing date-based location filters."""
-    date_filters = db.get_all_date_location_filters()
-    default_location = db.get_location_settings()
+    date_filters = admin_db.get_all_date_location_filters()
+    default_location = admin_db.get_location_settings()
 
     return templates.TemplateResponse(
         "admin_date_filters.html",
@@ -329,7 +331,7 @@ async def add_date_filter(request: Request):
         if not (0.1 <= radius_km <= 50):
             raise ValueError("Radius must be between 0.1 and 50 km")
 
-        db.add_date_location_filter(
+        admin_db.add_date_location_filter(
             filter_date, latitude, longitude, radius_km, description
         )
 
@@ -354,7 +356,7 @@ async def add_date_filter(request: Request):
 async def delete_date_filter(filter_date: str):
     """Delete a date-based location filter."""
     try:
-        db.delete_date_location_filter(filter_date)
+        admin_db.delete_date_location_filter(filter_date)
         return HTMLResponse(f"""
             <h3>✅ Date filter for {filter_date} deleted successfully!</h3>
             <p><a href='/admin/date-filters'>Back to Date Filters</a></p>
@@ -370,4 +372,4 @@ async def delete_date_filter(filter_date: str):
 @app.get("/api/date-filters")
 async def get_date_filters():
     """API endpoint to get all date-based location filters."""
-    return db.get_all_date_location_filters()
+    return admin_db.get_all_date_location_filters()
