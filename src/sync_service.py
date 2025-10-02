@@ -96,8 +96,20 @@ class ActivitySyncService:
                 "error": "No stored tokens found for athlete",
             }
 
-        # Create client with stored tokens
-        from main import client_id, client_secret  # Import from main
+        # Create client with environment variables
+        import os
+
+        from dotenv import load_dotenv
+
+        load_dotenv()
+        client_id = os.getenv("STRAVA_CLIENT_ID")
+        client_secret = os.getenv("STRAVA_CLIENT_SECRET")
+
+        if not client_id or not client_secret:
+            return {
+                "synced": False,
+                "error": "Strava client credentials not configured",
+            }
 
         client = StravaClient(client_id, client_secret)
 
