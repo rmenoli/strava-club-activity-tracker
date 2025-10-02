@@ -1,4 +1,5 @@
 import json
+import math
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime
@@ -43,6 +44,7 @@ class StravaDatabase:
                 )
             """)
 
+            # Indexes for performance
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_athlete_activities 
                 ON activities (athlete_id, start_date)
@@ -190,6 +192,158 @@ class StravaDatabase:
                     # You can merge with raw_data if you need full original data
                     pass
                 activities.append(activity)
+
+            return activities
+
+    def filter_activities(self, activities: List[Dict]) -> List[Dict]:
+        """Filter activities to include only those within 1km radius of target location."""
+        # Target location: Prague coordinates
+        target_lat = 50.097416
+        target_lon = 14.462274
+        max_radius_km = 1.0  # 1 km radius
+
+        def calculate_distance(
+            lat1: float, lon1: float, lat2: float, lon2: float
+        ) -> float:
+            """Calculate the great circle distance between two points (in km)."""
+            # Convert decimal degrees to radians
+            lat1, lon1, lat2, lon2 = map(math.radians, [lat1, lon1, lat2, lon2])
+
+            # Haversine formula
+            dlat = lat2 - lat1
+            dlon = lon2 - lon1
+            a = (
+                math.sin(dlat / 2) ** 2
+                + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
+            )
+            c = 2 * math.asin(math.sqrt(a))
+
+            # Radius of earth in kilometers
+            r = 6371
+            return c * r
+
+        filtered = []
+        for activity in activities:
+            # Check if activity has GPS coordinates
+            start_latlng = activity.get("start_latlng")
+            end_latlng = activity.get("end_latlng")
+
+            # Skip activities without GPS data
+            if not start_latlng or not end_latlng:
+                continue
+
+            # Validate GPS coordinates format
+            if (
+                not isinstance(start_latlng, list)
+                or len(start_latlng) != 2
+                or not isinstance(end_latlng, list)
+                or len(end_latlng) != 2
+            ):
+                continue
+
+            try:
+                # Extract coordinates
+                start_lat, start_lon = start_latlng[0], start_latlng[1]
+                end_lat, end_lon = end_latlng[0], end_latlng[1]
+
+                # Skip if coordinates are None or invalid
+                if any(
+                    coord is None for coord in [start_lat, start_lon, end_lat, end_lon]
+                ):
+                    continue
+
+                # Calculate distances from target location
+                start_distance = calculate_distance(
+                    target_lat, target_lon, start_lat, start_lon
+                )
+                end_distance = calculate_distance(
+                    target_lat, target_lon, end_lat, end_lon
+                )
+
+                # Include activity if BOTH start and end points are within radius
+                if start_distance <= max_radius_km and end_distance <= max_radius_km:
+                    # Add distance information to the activity for debugging/info
+                    activity["start_distance_km"] = round(start_distance, 3)
+                    activity["end_distance_km"] = round(end_distance, 3)
+                    filtered.append(activity)
+
+            except (ValueError, TypeError) as e:
+                # Skip activities with invalid coordinate data
+                print(
+                    f"Warning: Invalid GPS coordinates for activity {activity.get('activity_id', 'unknown')}: {e}"
+                )
+                continue
+
+        return filtered
+
+    def get_activities_filtered(
+        self, athlete_id: str, limit: int = None, activity_type: str = None
+    ) -> List[Dict]:
+        """Get activities with automatically extracted relevant fields from raw_data."""
+        with self.get_connection() as conn:
+            query = f"""
+                SELECT activity_id, athlete_id, name, type, start_date, distance, 
+                       moving_time, elapsed_time, total_elevation_gain,
+                       average_speed, max_speed, raw_data
+                FROM activities 
+                WHERE athlete_id = {athlete_id}
+            """
+
+            # Add activity type filter if specified
+            if activity_type:
+                query += f" AND type = '{activity_type}'"
+
+            query += " ORDER BY start_date DESC"
+
+            if limit:
+                query += f" LIMIT {limit}"
+
+            cursor = conn.execute(query)
+            activities = []
+
+            for row in cursor.fetchall():
+                activity = dict(row)
+
+                # Start with basic activity data
+                filtered_activity = {
+                    "activity_id": activity["activity_id"],
+                    "athlete_id": activity["athlete_id"],
+                    "name": activity["name"],
+                    "type": activity["type"],
+                    "start_date": activity["start_date"],
+                    "distance": activity["distance"],
+                    "moving_time": activity["moving_time"],
+                }
+
+                # Parse and extract relevant fields from raw_data
+                if activity["raw_data"]:
+                    try:
+                        raw_data = json.loads(activity["raw_data"])
+
+                        # Extract specific fields from raw_data
+                        extracted_fields = {
+                            "start_latlng": raw_data.get("start_latlng"),
+                            "end_latlng": raw_data.get("end_latlng"),
+                            "athlete_count": raw_data.get("athlete_count"),
+                            "photo_count": raw_data.get("photo_count"),
+                            "kudos_count": raw_data.get("kudos_count"),
+                            "comment_count": raw_data.get("comment_count"),
+                            "has_kudos": raw_data.get("has_kudos"),
+                            "pr_count": raw_data.get("pr_count"),
+                        }
+
+                        # Add extracted fields to activity
+                        filtered_activity.update(extracted_fields)
+
+                    except (json.JSONDecodeError, TypeError) as e:
+                        # If JSON parsing fails, continue without extracted fields
+                        print(
+                            f"Warning: Could not parse raw_data for activity {activity['activity_id']}: {e}"
+                        )
+
+                activities.append(filtered_activity)
+
+            activities = self.filter_activities(activities)
 
             return activities
 

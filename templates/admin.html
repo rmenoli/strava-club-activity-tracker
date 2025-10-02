@@ -178,18 +178,16 @@
                         {% endif %}
                     </td>
                     <td>
-                        {% if not athlete.last_sync %}
+                        {% if athlete.sync_status == 'never' %}
                             <span class="sync-status sync-never">Never Synced</span>
-                        {% elif (athlete.last_sync and ((athlete.last_sync | length) > 10)) %}
-                            {% set sync_date = athlete.last_sync[:19] %}
-                            {% set hours_ago = ((now() - sync_date | to_datetime).total_seconds() / 3600) if sync_date else 999 %}
-                            {% if hours_ago < 24 %}
-                                <span class="sync-status sync-recent">Recent</span>
-                            {% else %}
-                                <span class="sync-status sync-old">Outdated</span>
-                            {% endif %}
-                        {% else %}
+                        {% elif athlete.sync_status == 'recent' %}
+                            <span class="sync-status sync-recent">Recent</span>
+                        {% elif athlete.sync_status == 'old' %}
+                            <span class="sync-status sync-old">This Week</span>
+                        {% elif athlete.sync_status == 'very_old' %}
                             <span class="sync-status sync-old">Outdated</span>
+                        {% else %}
+                            <span class="sync-status sync-old">Unknown</span>
                         {% endif %}
                     </td>
                     <td>

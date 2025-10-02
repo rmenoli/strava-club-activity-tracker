@@ -42,8 +42,8 @@ async def index(request: Request):
     if athlete_id:
         try:
             # Get activities from database
-            activities = db.get_activities(
-                athlete_id, limit=100
+            activities = db.get_activities_filtered(
+                athlete_id, limit=100, activity_type="Run"
             )  # Limit for performance
 
             if activities:
@@ -206,7 +206,33 @@ async def athlete_stats(request: Request):
 @app.get("/admin")
 async def admin_dashboard(request: Request):
     """Admin dashboard showing all athletes (for development)."""
+    from datetime import datetime
+
     athletes = db.get_all_athletes()
+
+    # Add sync status calculation for each athlete
+    for athlete in athletes:
+        if athlete.get("last_sync"):
+            try:
+                # Parse the sync date and calculate hours ago
+                sync_dt = datetime.fromisoformat(
+                    athlete["last_sync"].replace("Z", "+00:00")
+                )
+                hours_ago = (
+                    datetime.now() - sync_dt.replace(tzinfo=None)
+                ).total_seconds() / 3600
+
+                if hours_ago < 24:
+                    athlete["sync_status"] = "recent"
+                elif hours_ago < 168:  # 1 week
+                    athlete["sync_status"] = "old"
+                else:
+                    athlete["sync_status"] = "very_old"
+            except (ValueError, TypeError):
+                athlete["sync_status"] = "unknown"
+        else:
+            athlete["sync_status"] = "never"
+
     return templates.TemplateResponse(
         "admin.html", {"request": request, "athletes": athletes}
     )
