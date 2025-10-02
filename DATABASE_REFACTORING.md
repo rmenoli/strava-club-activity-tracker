@@ -2,15 +2,31 @@
 
 ## Overview
 
-The `StravaDatabase` class has been refactored into a modular architecture with two specialized database classes:
+The `StravaDatabase` class has been refactored into a modular architecture with specialized database classes organized in a dedicated `databases` folder:
 
 1. **`AdminDatabase`** - Handles admin-related operations (settings, date filters)
 2. **`StravaDataDatabase`** - Handles core data operations (athletes, activities, GPS filtering)
 3. **`StravaDatabase`** (Unified) - Maintains backward compatibility by delegating to the specialized classes
 
+## New File Structure
+
+```
+src/
+├── __init__.py              # Package exports
+├── database.py              # Backward-compatible import (imports from databases/unified_database)
+├── databases/               # 🆕 NEW: Dedicated databases folder
+│   ├── __init__.py          # Database package exports
+│   ├── admin_database.py    # AdminDatabase class
+│   ├── strava_data_database.py  # StravaDataDatabase class
+│   └── unified_database.py  # Unified StravaDatabase class
+├── store_token.py
+├── strava_client.py
+└── sync_service.py
+```
+
 ## Architecture
 
-### 1. AdminDatabase (`src/admin_database.py`)
+### 1. AdminDatabase (`src/databases/admin_database.py`)
 
 **Purpose**: Manages admin configurations, settings, and date-based location filters.
 
@@ -24,7 +40,7 @@ The `StravaDatabase` class has been refactored into a modular architecture with 
 - `settings` - Global configuration settings
 - `date_location_filters` - Date-specific location filters
 
-### 2. StravaDataDatabase (`src/strava_data_database.py`)
+### 2. StravaDataDatabase (`src/databases/strava_data_database.py`)
 
 **Purpose**: Manages core Strava data including athletes, activities, and GPS-based filtering.
 
@@ -38,7 +54,7 @@ The `StravaDatabase` class has been refactored into a modular architecture with 
 - `athletes` - Athlete information and sync status
 - `activities` - Activity data with GPS coordinates
 
-### 3. Unified StravaDatabase (`src/unified_database.py`)
+### 3. Unified StravaDatabase (`src/databases/unified_database.py`)
 
 **Purpose**: Provides a unified interface that maintains backward compatibility while delegating operations to specialized classes.
 
@@ -48,12 +64,55 @@ The `StravaDatabase` class has been refactored into a modular architecture with 
 - Maintains the same public API as the original monolithic class
 - Handles cross-class dependencies (e.g., GPS filtering needs admin settings)
 
-## Benefits of Refactoring
+## Usage Examples
 
-### 🎯 **Separation of Concerns**
-- Admin logic is separated from core data logic
-- Each class has a single, clear responsibility
-- Easier to reason about and maintain
+### Direct Usage of Specialized Classes (Recommended for new code)
+
+```python
+# Import from the databases package
+from src.databases.admin_database import AdminDatabase
+from src.databases.strava_data_database import StravaDataDatabase
+
+# Use AdminDatabase directly for admin operations
+admin_db = AdminDatabase()
+admin_db.set_setting("target_latitude", "50.097416")
+filters = admin_db.get_all_date_location_filters()
+
+# Use StravaDataDatabase directly for data operations
+data_db = StravaDataDatabase()
+athletes = data_db.get_all_athletes()
+activities = data_db.get_activities_filtered("athlete_123", admin_db)
+```
+
+### Package-level imports
+
+```python
+# Import from the databases package root
+from src.databases import AdminDatabase, StravaDataDatabase
+
+admin_db = AdminDatabase()
+data_db = StravaDataDatabase()
+```
+
+### Unified Usage (Backward Compatible)
+
+```python
+# Continue using the unified interface - works exactly as before
+from src.database import StravaDatabase
+db = StravaDatabase()
+
+# All existing methods work exactly the same
+db.set_setting("target_latitude", "50.097416")
+athletes = db.get_all_athletes()
+activities = db.get_activities_filtered("athlete_123")
+```
+
+## Benefits of the New Structure
+
+### 🎯 **Better Organization**
+- Database classes are logically grouped in a dedicated folder
+- Clear separation between specialized and unified interfaces
+- Easier to navigate and understand the codebase
 
 ### 🔧 **Improved Maintainability**
 - Changes to admin features don't affect data operations
@@ -66,44 +125,39 @@ The `StravaDatabase` class has been refactored into a modular architecture with 
 - Write focused unit tests for specific functionality
 
 ### 📈 **Better Scalability**
-- Add new admin features without touching data logic
+- Add new database classes easily (e.g., `AnalyticsDatabase`, `ReportsDatabase`)
 - Optimize data operations without affecting admin features
 - Easier to extend either part of the system
 
-### 🔄 **Backward Compatibility**
+### 🔄 **Full Backward Compatibility**
 - Existing code continues to work unchanged
 - Gradual migration path for future improvements
 - No breaking changes to the public API
 
-## Usage Examples
+## Migration Guide
 
-### Direct Usage of Specialized Classes
+### For New Development
+- Use specialized classes directly: `from src.databases import AdminDatabase, StravaDataDatabase`
+- Use the unified class when you need both or want the simplest interface
 
-```python
-# Use AdminDatabase directly for admin operations
-from src.admin_database import AdminDatabase
-admin_db = AdminDatabase()
-admin_db.set_setting("target_latitude", "50.097416")
-filters = admin_db.get_all_date_location_filters()
+### For Existing Code
+- **No changes required** - all existing code continues to work
+- `from src.database import StravaDatabase` still works exactly as before
+- Optionally migrate to direct usage of specialized classes for better performance and clarity
 
-# Use StravaDataDatabase directly for data operations
-from src.strava_data_database import StravaDataDatabase
-data_db = StravaDataDatabase()
-athletes = data_db.get_all_athletes()
-activities = data_db.get_activities_filtered("athlete_123", admin_db)
-```
-
-### Unified Usage (Backward Compatible)
+### Example Migration
 
 ```python
-# Continue using the unified interface
+# Before (still works)
 from src.database import StravaDatabase
 db = StravaDatabase()
-
-# All existing methods work exactly the same
-db.set_setting("target_latitude", "50.097416")
-athletes = db.get_all_athletes()
 activities = db.get_activities_filtered("athlete_123")
+
+# After (recommended for new code)
+from src.databases import AdminDatabase, StravaDataDatabase
+admin_db = AdminDatabase()
+data_db = StravaDataDatabase()
+activities = data_db.get_activities_filtered("athlete_123", admin_db)
 ```
 
 ## Cross-Class Dependencies
@@ -111,7 +165,7 @@ activities = db.get_activities_filtered("athlete_123")
 ### GPS Filtering
 GPS filtering requires both data and admin components:
 - `StravaDataDatabase.filter_activities()` needs admin settings for location data
-- The unified class handles this by passing the `admin_db` instance to the filtering methods
+- The unified class handles this automatically
 - Direct usage requires manually passing the admin database instance
 
 ### Example:
@@ -126,28 +180,7 @@ db = StravaDatabase()
 activities = db.get_activities_filtered("athlete_123")  # admin_db handled internally
 ```
 
-## File Structure
-
-```
-src/
-├── __init__.py              # Package exports
-├── database.py              # Backward-compatible import (imports from unified_database)
-├── admin_database.py        # AdminDatabase class
-├── strava_data_database.py  # StravaDataDatabase class
-└── unified_database.py      # Unified StravaDatabase class
-```
-
-## Migration Guide
-
-### For New Development
-- Use specialized classes directly when you know you only need admin or data operations
-- Use the unified class when you need both or want the simplest interface
-
-### For Existing Code
-- No changes required - all existing code continues to work
-- Optionally migrate to direct usage of specialized classes for better performance and clarity
-
-### Performance Considerations
+## Performance Considerations
 - Direct usage of specialized classes has slightly better performance (no delegation overhead)
 - Unified class has minimal overhead and maintains full functionality
 - Database connection overhead is the same regardless of approach
@@ -155,30 +188,14 @@ src/
 ## Future Enhancements
 
 ### Potential Improvements
-1. **Async Support**: Add async versions of database methods
-2. **Connection Pooling**: Implement connection pooling for better performance
-3. **Query Optimization**: Add query builders and optimization tools
-4. **Caching**: Add caching layers for frequently accessed data
-5. **Monitoring**: Add database operation monitoring and metrics
+1. **Additional Database Classes**: Add specialized classes like `AnalyticsDatabase`, `ReportsDatabase`
+2. **Async Support**: Add async versions of database methods
+3. **Connection Pooling**: Implement connection pooling for better performance
+4. **Query Optimization**: Add query builders and optimization tools
+5. **Caching**: Add caching layers for frequently accessed data
 
 ### Extension Points
 - Admin features can be extended independently (new settings, filters, etc.)
 - Data features can be extended independently (new activity types, stats, etc.)
-- New specialized database classes can be added (e.g., `AnalyticsDatabase`)
-
-## Testing Strategy
-
-### Unit Tests
-- Test each class independently
-- Mock dependencies for isolated testing
-- Test edge cases and error conditions
-
-### Integration Tests
-- Test cross-class interactions
-- Verify unified interface works correctly
-- Test database schema and migrations
-
-### Backward Compatibility Tests
-- Ensure all existing functionality works unchanged
-- Test that API contracts are maintained
-- Verify no performance regressions
+- New specialized database classes can be added to the `databases` folder
+- Package structure supports easy addition of new modules

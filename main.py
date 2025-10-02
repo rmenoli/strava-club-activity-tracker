@@ -6,10 +6,10 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from src.admin_database import AdminDatabase
+from src.databases.admin_database import AdminDatabase
+from src.databases.strava_data_database import StravaDataDatabase
 from src.store_token import load_tokens, save_tokens
 from src.strava_client import StravaClient
-from src.strava_data_database import StravaDataDatabase
 from src.sync_service import ActivitySyncService
 
 load_dotenv()
