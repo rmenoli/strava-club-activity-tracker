@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Settings - Strava Club Activity Tracker</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #fc4c02;
+            border-bottom: 2px solid #fc4c02;
+            padding-bottom: 10px;
+        }
+        .nav-links {
+            margin-bottom: 20px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+        .nav-links a {
+            color: #fc4c02;
+            text-decoration: none;
+            margin-right: 15px;
+            font-weight: bold;
+        }
+        .nav-links a:hover {
+            text-decoration: underline;
+        }
+        .settings-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #f9f9f9;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #333;
+        }
+        input[type="number"], input[type="text"] {
+            width: 100%;
+            max-width: 300px;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .btn {
+            background-color: #fc4c02;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        .btn:hover {
+            background-color: #e03e02;
+        }
+        .current-settings {
+            background-color: #e7f3ff;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        .help-text {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+        .coordinates-input {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        .map-link {
+            color: #fc4c02;
+            text-decoration: none;
+            font-size: 12px;
+        }
+        .map-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚙️ Admin Settings</h1>
+        
+        <div class="nav-links">
+            <a href="/admin">🏠 Admin Dashboard</a>
+            <a href="/admin/date-filters">📅 Date Filters</a>
+            <a href="/">🏃 Main App</a>
+            <a href="#" onclick="window.location.reload()">🔄 Refresh</a>
+        </div>
+
+        <div class="settings-section">
+            <h2>📍 Location Filter Settings</h2>
+            
+            <div class="current-settings">
+                <h4>Current Settings:</h4>
+                <p><strong>Target Location:</strong> [{{ location.target_latitude }}, {{ location.target_longitude }}]</p>
+                <p><strong>Filter Radius:</strong> {{ location.filter_radius_km }} km</p>
+                <a href="https://www.google.com/maps?q={{ location.target_latitude }},{{ location.target_longitude }}" 
+                   target="_blank" class="map-link">📍 View on Google Maps</a>
+            </div>
+
+            <form method="post" action="/admin/settings/location">
+                <div class="form-group">
+                    <label for="latitude">Latitude:</label>
+                    <input type="number" id="latitude" name="latitude" 
+                           value="{{ location.target_latitude }}" 
+                           step="0.000001" min="-90" max="90" required>
+                    <div class="help-text">Enter latitude between -90 and 90 degrees</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="longitude">Longitude:</label>
+                    <input type="number" id="longitude" name="longitude" 
+                           value="{{ location.target_longitude }}" 
+                           step="0.000001" min="-180" max="180" required>
+                    <div class="help-text">Enter longitude between -180 and 180 degrees</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="radius_km">Filter Radius (km):</label>
+                    <input type="number" id="radius_km" name="radius_km" 
+                           value="{{ location.filter_radius_km }}" 
+                           step="0.1" min="0.1" max="50" required>
+                    <div class="help-text">Radius in kilometers (0.1 - 50 km)</div>
+                </div>
+
+                <button type="submit" class="btn">💾 Update Location Settings</button>
+            </form>
+
+            <div style="margin-top: 20px;">
+                <h4>📝 Quick Location Examples:</h4>
+                <ul>
+                    <li><strong>Prague, Czech Republic:</strong> [50.0755, 14.4378]</li>
+                    <li><strong>London, UK:</strong> [51.5074, -0.1278]</li>
+                    <li><strong>New York, USA:</strong> [40.7128, -74.0060]</li>
+                    <li><strong>Tokyo, Japan:</strong> [35.6762, 139.6503]</li>
+                </ul>
+                <p class="help-text">💡 Tip: You can find coordinates by right-clicking on Google Maps and selecting the coordinates.</p>
+            </div>
+        </div>
+
+        {% if settings %}
+        <div class="settings-section">
+            <h2>🔧 All Settings</h2>
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="background-color: #fc4c02; color: white;">
+                        <th style="padding: 10px; text-align: left;">Setting</th>
+                        <th style="padding: 10px; text-align: left;">Value</th>
+                        <th style="padding: 10px; text-align: left;">Description</th>
+                        <th style="padding: 10px; text-align: left;">Last Updated</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for setting in settings %}
+                    <tr style="border-bottom: 1px solid #ddd;">
+                        <td style="padding: 10px; font-family: monospace;">{{ setting.key }}</td>
+                        <td style="padding: 10px; font-weight: bold;">{{ setting.value }}</td>
+                        <td style="padding: 10px;">{{ setting.description or 'No description' }}</td>
+                        <td style="padding: 10px; font-size: 12px; color: #666;">
+                            {{ setting.updated_at[:19].replace('T', ' ') if setting.updated_at else 'Unknown' }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>

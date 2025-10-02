@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Date-Based Location Filters - Strava Club Activity Tracker</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #fc4c02;
+            border-bottom: 2px solid #fc4c02;
+            padding-bottom: 10px;
+        }
+        .nav-links {
+            margin-bottom: 20px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+        .nav-links a {
+            color: #fc4c02;
+            text-decoration: none;
+            margin-right: 15px;
+            font-weight: bold;
+        }
+        .nav-links a:hover {
+            text-decoration: underline;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #f9f9f9;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #333;
+        }
+        input[type="date"], input[type="number"], input[type="text"], textarea {
+            width: 100%;
+            max-width: 300px;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        textarea {
+            max-width: 500px;
+            height: 60px;
+            resize: vertical;
+        }
+        .btn {
+            background-color: #fc4c02;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        .btn:hover {
+            background-color: #e03e02;
+        }
+        .btn-danger {
+            background-color: #dc3545;
+        }
+        .btn-danger:hover {
+            background-color: #c82333;
+        }
+        .btn-small {
+            padding: 5px 10px;
+            font-size: 12px;
+        }
+        .default-info {
+            background-color: #e7f3ff;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        .help-text {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #fc4c02;
+            color: white;
+            font-weight: bold;
+        }
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+        .date-cell {
+            font-family: monospace;
+            font-weight: bold;
+        }
+        .coordinates-cell {
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .no-filters {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+            padding: 40px;
+        }
+        .map-link {
+            color: #fc4c02;
+            text-decoration: none;
+            font-size: 11px;
+        }
+        .map-link:hover {
+            text-decoration: underline;
+        }
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📅 Date-Based Location Filters</h1>
+        
+        <div class="nav-links">
+            <a href="/admin">🏠 Admin Dashboard</a>
+            <a href="/admin/settings">⚙️ Global Settings</a>
+            <a href="/">🏃 Main App</a>
+            <a href="#" onclick="window.location.reload()">🔄 Refresh</a>
+        </div>
+
+        <div class="default-info">
+            <h4>📍 Default Location Settings:</h4>
+            <p><strong>Default Target:</strong> [{{ default_location.target_latitude }}, {{ default_location.target_longitude }}]</p>
+            <p><strong>Default Radius:</strong> {{ default_location.filter_radius_km }} km</p>
+            <p><em>These settings are used for dates without specific filters.</em></p>
+        </div>
+
+        <div class="section">
+            <h2>➕ Add New Date Filter</h2>
+            <form method="post" action="/admin/date-filters/add">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="filter_date">Date:</label>
+                        <input type="date" id="filter_date" name="filter_date" required>
+                        <div class="help-text">Select the specific date for this filter</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="radius_km">Radius (km):</label>
+                        <input type="number" id="radius_km" name="radius_km" 
+                               value="{{ default_location.filter_radius_km }}" 
+                               step="0.1" min="0.1" max="50" required>
+                        <div class="help-text">Filter radius in kilometers</div>
+                    </div>
+                </div>
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="latitude">Latitude:</label>
+                        <input type="number" id="latitude" name="latitude" 
+                               value="{{ default_location.target_latitude }}" 
+                               step="0.000001" min="-90" max="90" required>
+                        <div class="help-text">Latitude (-90 to 90 degrees)</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="longitude">Longitude:</label>
+                        <input type="number" id="longitude" name="longitude" 
+                               value="{{ default_location.target_longitude }}" 
+                               step="0.000001" min="-180" max="180" required>
+                        <div class="help-text">Longitude (-180 to 180 degrees)</div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="description">Description (Optional):</label>
+                    <textarea id="description" name="description" placeholder="e.g., Marathon route, Training location, etc."></textarea>
+                    <div class="help-text">Optional description for this date filter</div>
+                </div>
+
+                <button type="submit" class="btn">💾 Add Date Filter</button>
+            </form>
+        </div>
+
+        <div class="section">
+            <h2>📋 Existing Date Filters</h2>
+            
+            {% if date_filters %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Location</th>
+                        <th>Radius</th>
+                        <th>Description</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for filter in date_filters %}
+                    <tr>
+                        <td class="date-cell">{{ filter.filter_date }}</td>
+                        <td class="coordinates-cell">
+                            [{{ filter.target_latitude }}, {{ filter.target_longitude }}]
+                            <br>
+                            <a href="https://www.google.com/maps?q={{ filter.target_latitude }},{{ filter.target_longitude }}" 
+                               target="_blank" class="map-link">📍 View on Map</a>
+                        </td>
+                        <td>{{ filter.radius_km }} km</td>
+                        <td>{{ filter.description or '-' }}</td>
+                        <td style="font-size: 11px; color: #666;">
+                            {{ filter.created_at[:10] if filter.created_at else 'Unknown' }}
+                        </td>
+                        <td>
+                            <form method="post" action="/admin/date-filters/delete/{{ filter.filter_date }}" 
+                                  style="display: inline;" 
+                                  onsubmit="return confirm('Are you sure you want to delete the filter for {{ filter.filter_date }}?')">
+                                <button type="submit" class="btn btn-danger btn-small">🗑️ Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="no-filters">
+                <h3>No date-specific filters configured</h3>
+                <p>All activities will use the default location settings.</p>
+                <p>Use the form above to add date-specific location filters.</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="section">
+            <h2>💡 How Date-Based Filtering Works</h2>
+            <ul>
+                <li><strong>Specific Date Filters:</strong> Activities on dates with specific filters use those settings</li>
+                <li><strong>Default Fallback:</strong> Activities on dates without specific filters use the default settings</li>
+                <li><strong>GPS Requirement:</strong> Only activities with both start and end GPS coordinates are filtered</li>
+                <li><strong>Dual Point Check:</strong> Both start AND end points must be within the radius</li>
+            </ul>
+            
+            <h4>📝 Use Cases:</h4>
+            <ul>
+                <li><strong>Events:</strong> Set specific locations for race days or special events</li>
+                <li><strong>Travel:</strong> Different locations when traveling or on vacation</li>
+                <li><strong>Training:</strong> Specific areas for different training periods</li>
+                <li><strong>Seasonal:</strong> Different locations for different seasons</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
