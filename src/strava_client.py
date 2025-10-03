@@ -1,17 +1,3 @@
-import os
-import time
-import webbrowser
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional
-from urllib.parse import parse_qs, urlparse
-
-import pandas as pd
-import requests
-from dotenv import load_dotenv
-
-load_dotenv()
-
-import json
 import time
 from datetime import datetime
 from typing import Dict, List, Optional
@@ -86,8 +72,7 @@ class StravaClient:
         """Fetch a single page of activities."""
         # Ensure we have a valid token
         if not self.ensure_valid_token():
-            if not self.get_new_tokens_interactive():
-                raise Exception("Failed to obtain valid access token")
+            raise Exception("Failed to obtain valid access token")
 
         headers = {"Authorization": f"Bearer {self.access_token}"}
         params = {"per_page": per_page, "page": page}
@@ -179,24 +164,3 @@ class StravaClient:
         except Exception as e:
             print(f"Error exchanging code for tokens: {e}")
             return None
-
-    def get_new_tokens_interactive(self) -> Optional[str]:
-        """Interactive OAuth flow to get new tokens when refresh fails."""
-        scopes = "read,activity:read_all,profile:read_all"
-        auth_url = (
-            f"{self.AUTH_URL}?"
-            f"client_id={self.client_id}&"
-            f"response_type=code&"
-            f"redirect_uri={self.REDIRECT_URI}&"
-            f"approval_prompt=force&"
-            f"scope={scopes}"
-        )
-
-        print(f"Go to: {auth_url}")
-        webbrowser.open(auth_url)
-        redirected_url = input("Paste the redirected URL: ").strip()
-
-        parsed_url = urlparse(redirected_url)
-        code = parse_qs(parsed_url.query)["code"][0]
-
-        return self.exchange_code_for_tokens(code)

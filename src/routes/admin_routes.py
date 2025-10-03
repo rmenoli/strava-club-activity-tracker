@@ -46,56 +46,6 @@ def setup_admin_routes(app, data_db, admin_db):
             "admin.html", {"request": request, "athletes": athletes}
         )
 
-    @app.get("/admin/settings")
-    async def admin_settings(request: Request):
-        """Admin settings page for configuring location filters."""
-        settings = admin_db.get_all_settings()
-        location_settings = admin_db.get_location_settings()
-
-        return templates.TemplateResponse(
-            "admin_settings.html",
-            {"request": request, "settings": settings, "location": location_settings},
-        )
-
-    @app.post("/admin/settings/location")
-    async def update_location_settings(request: Request):
-        """Update location filter settings."""
-        form_data = await request.form()
-
-        try:
-            latitude = float(form_data.get("latitude"))
-            longitude = float(form_data.get("longitude"))
-            radius_km = float(form_data.get("radius_km", 1.0))
-
-            # Validate latitude and longitude ranges
-            if not (-90 <= latitude <= 90):
-                raise ValueError("Latitude must be between -90 and 90")
-            if not (-180 <= longitude <= 180):
-                raise ValueError("Longitude must be between -180 and 180")
-            if not (0.1 <= radius_km <= 50):
-                raise ValueError("Radius must be between 0.1 and 50 km")
-
-            admin_db.update_location_settings(latitude, longitude, radius_km)
-
-            return HTMLResponse(f"""
-                <h3>✅ Location settings updated successfully!</h3>
-                <p>New target location: [{latitude}, {longitude}]</p>
-                <p>Filter radius: {radius_km} km</p>
-                <p><a href='/admin/settings'>Back to Settings</a> | <a href='/admin'>Admin Dashboard</a></p>
-            """)
-
-        except (ValueError, TypeError) as e:
-            return HTMLResponse(f"""
-                <h3>❌ Error updating location settings</h3>
-                <p>Error: {str(e)}</p>
-                <p><a href='/admin/settings'>Back to Settings</a></p>
-            """)
-
-    @app.get("/api/location-settings")
-    async def get_location_settings():
-        """API endpoint to get current location settings."""
-        return admin_db.get_location_settings()
-
     @app.get("/admin/date-filters")
     async def admin_date_filters(request: Request):
         """Admin page for managing date-based location filters."""

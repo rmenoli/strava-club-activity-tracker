@@ -72,37 +72,6 @@ class AdminDatabase:
             result = cursor.fetchone()
             return result["value"] if result else default_value
 
-    def set_setting(self, key: str, value: str, description: str = None) -> None:
-        """Set a setting value by key."""
-        with self.get_connection() as conn:
-            if description:
-                conn.execute(
-                    """
-                    INSERT OR REPLACE INTO settings (key, value, description, updated_at) 
-                    VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-                """,
-                    (key, value, description),
-                )
-            else:
-                conn.execute(
-                    """
-                    INSERT OR REPLACE INTO settings (key, value, updated_at) 
-                    VALUES (?, ?, CURRENT_TIMESTAMP)
-                """,
-                    (key, value),
-                )
-            conn.commit()
-
-    def get_all_settings(self) -> List[Dict]:
-        """Get all settings for admin interface."""
-        with self.get_connection() as conn:
-            cursor = conn.execute("""
-                SELECT key, value, description, updated_at 
-                FROM settings 
-                ORDER BY key
-            """)
-            return [dict(row) for row in cursor.fetchall()]
-
     # ===== LOCATION SETTINGS =====
 
     def get_location_settings(self) -> Dict:
@@ -114,27 +83,6 @@ class AdminDatabase:
             ),
             "filter_radius_km": float(self.get_setting("filter_radius_km", "1.0")),
         }
-
-    def update_location_settings(
-        self, latitude: float, longitude: float, radius_km: float = None
-    ) -> None:
-        """Update location filter settings."""
-        self.set_setting(
-            "target_latitude",
-            str(latitude),
-            "Target location latitude for activity filtering",
-        )
-        self.set_setting(
-            "target_longitude",
-            str(longitude),
-            "Target location longitude for activity filtering",
-        )
-        if radius_km is not None:
-            self.set_setting(
-                "filter_radius_km",
-                str(radius_km),
-                "Radius in kilometers for location filtering",
-            )
 
     # ===== DATE-BASED LOCATION FILTERS =====
 

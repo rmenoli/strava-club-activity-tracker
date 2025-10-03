@@ -1,7 +1,5 @@
-# Export main database classes for backward compatibility
-from .database import StravaDatabase
+# Export main database classes
 from .databases.admin_database import AdminDatabase
 from .databases.strava_data_database import StravaDataDatabase
-from .databases.unified_database import StravaDatabase as UnifiedDatabase
 
-__all__ = ["StravaDatabase", "AdminDatabase", "StravaDataDatabase", "UnifiedDatabase"]
+__all__ = ["AdminDatabase", "StravaDataDatabase"]

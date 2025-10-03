@@ -1,13 +1,13 @@
 from datetime import datetime, timedelta
 from typing import Optional
 
-from src.database import StravaDatabase
 from src.store_token import load_tokens
 from src.strava_client import StravaClient
 
 
 class ActivitySyncService:
-    def __init__(self, db: StravaDatabase):
+    def __init__(self, db):
+        """Initialize with a database instance (AdminDatabase or StravaDataDatabase)."""
         self.db = db
 
     def should_sync(self, athlete_id: str) -> bool:
@@ -120,27 +120,6 @@ class ActivitySyncService:
         client.expires_at = token_data["expires_at"]
 
         return self.sync_athlete_activities(athlete_id, client)
-
-    def background_sync_all_athletes(self) -> list:
-        """Background job to sync all athletes with stored tokens."""
-        results = []
-        athletes = self.db.get_all_athletes()
-
-        for athlete in athletes:
-            athlete_id = athlete["athlete_id"]
-            if self.should_sync(athlete_id):
-                result = self.sync_athlete_with_stored_tokens(athlete_id)
-                results.append(result)
-            else:
-                results.append(
-                    {
-                        "athlete_id": athlete_id,
-                        "synced": False,
-                        "message": "Sync not needed",
-                    }
-                )
-
-        return results
 
     def get_athlete_summary(self, athlete_id: str) -> dict:
         """Get a summary of athlete's activities and sync status."""

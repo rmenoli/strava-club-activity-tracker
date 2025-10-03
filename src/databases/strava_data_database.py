@@ -243,100 +243,7 @@ class StravaDataDatabase:
 
             return activities
 
-    # ===== GPS FILTERING =====
-
-    def filter_activities(self, activities: List[Dict], admin_db) -> List[Dict]:
-        """Filter activities to include only those within radius of date-specific target locations."""
-
-        def calculate_distance(
-            lat1: float, lon1: float, lat2: float, lon2: float
-        ) -> float:
-            """Calculate the great circle distance between two points (in km)."""
-            # Convert decimal degrees to radians
-            lat1, lon1, lat2, lon2 = map(math.radians, [lat1, lon1, lat2, lon2])
-
-            # Haversine formula
-            dlat = lat2 - lat1
-            dlon = lon2 - lon1
-            a = (
-                math.sin(dlat / 2) ** 2
-                + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
-            )
-            c = 2 * math.asin(math.sqrt(a))
-
-            # Radius of earth in kilometers
-            r = 6371
-            return c * r
-
-        filtered = []
-        for activity in activities:
-            # Get location settings for this specific activity's date
-            activity_date = activity.get("start_date", "")
-            if not activity_date:
-                continue
-
-            location_settings = admin_db.get_location_settings_for_activity(
-                activity_date
-            )
-            target_lat = location_settings["target_latitude"]
-            target_lon = location_settings["target_longitude"]
-            max_radius_km = location_settings["filter_radius_km"]
-
-            # Check if activity has GPS coordinates
-            start_latlng = activity.get("start_latlng")
-            end_latlng = activity.get("end_latlng")
-
-            # Skip activities without GPS data
-            if not start_latlng or not end_latlng:
-                continue
-
-            # Validate GPS coordinates format
-            if (
-                not isinstance(start_latlng, list)
-                or len(start_latlng) != 2
-                or not isinstance(end_latlng, list)
-                or len(end_latlng) != 2
-            ):
-                continue
-
-            try:
-                # Extract coordinates
-                start_lat, start_lon = start_latlng[0], start_latlng[1]
-                end_lat, end_lon = end_latlng[0], end_latlng[1]
-
-                # Skip if coordinates are None or invalid
-                if any(
-                    coord is None for coord in [start_lat, start_lon, end_lat, end_lon]
-                ):
-                    continue
-
-                # Calculate distances from target location
-                start_distance = calculate_distance(
-                    target_lat, target_lon, start_lat, start_lon
-                )
-                end_distance = calculate_distance(
-                    target_lat, target_lon, end_lat, end_lon
-                )
-
-                # Include activity if BOTH start and end points are within radius
-                if start_distance <= max_radius_km and end_distance <= max_radius_km:
-                    # Add distance information to the activity for debugging/info
-                    activity["start_distance_km"] = round(start_distance, 3)
-                    activity["end_distance_km"] = round(end_distance, 3)
-                    activity["target_location"] = [target_lat, target_lon]
-                    activity["filter_radius_km"] = max_radius_km
-                    activity["filter_source"] = location_settings["source"]
-                    activity["filter_date"] = location_settings.get("filter_date")
-                    filtered.append(activity)
-
-            except (ValueError, TypeError) as e:
-                # Skip activities with invalid coordinate data
-                print(
-                    f"Warning: Invalid GPS coordinates for activity {activity.get('activity_id', 'unknown')}: {e}"
-                )
-                continue
-
-        return filtered
+    # ===== ACTIVITY FILTERING =====
 
     def get_activities_filtered(
         self, athlete_id: str, admin_db, limit: int = None, activity_type: str = None
@@ -404,8 +311,5 @@ class StravaDataDatabase:
                         )
 
                 activities.append(filtered_activity)
-
-            # Apply GPS filtering using admin database for location settings
-            activities = self.filter_activities(activities, admin_db)
 
             return activities
