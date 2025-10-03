@@ -6,19 +6,19 @@ The `StravaDatabase` class has been refactored into a modular architecture with 
 
 1. **`AdminDatabase`** - Handles admin-related operations (settings, date filters)
 2. **`StravaDataDatabase`** - Handles core data operations (athletes, activities, GPS filtering)
-3. **`StravaDatabase`** (Unified) - Maintains backward compatibility by delegating to the specialized classes
 
 ## New File Structure
 
 ```
 src/
-├── __init__.py              # Package exports
-├── database.py              # Backward-compatible import (imports from databases/unified_database)
-├── databases/               # 🆕 NEW: Dedicated databases folder
+├── databases/               # Dedicated databases folder
 │   ├── __init__.py          # Database package exports
 │   ├── admin_database.py    # AdminDatabase class
-│   ├── strava_data_database.py  # StravaDataDatabase class
-│   └── unified_database.py  # Unified StravaDatabase class
+│   └── strava_data_database.py  # StravaDataDatabase class
+├── routes/
+│   ├── __init__.py
+│   ├── admin_routes.py
+│   └── main_routes.py
 ├── store_token.py
 ├── strava_client.py
 └── sync_service.py
@@ -54,37 +54,27 @@ src/
 - `athletes` - Athlete information and sync status
 - `activities` - Activity data with GPS coordinates
 
-### 3. Unified StravaDatabase (`src/databases/unified_database.py`)
-
-**Purpose**: Provides a unified interface that maintains backward compatibility while delegating operations to specialized classes.
-
-**Key Features**:
-- Delegates admin operations to `AdminDatabase`
-- Delegates data operations to `StravaDataDatabase`
-- Maintains the same public API as the original monolithic class
-- Handles cross-class dependencies (e.g., GPS filtering needs admin settings)
-
 ## Usage Examples
 
-### Direct Usage of Specialized Classes (Recommended for new code)
+### Direct Import from Specific Modules
 
 ```python
 # Import from the databases package
 from src.databases.admin_database import AdminDatabase
 from src.databases.strava_data_database import StravaDataDatabase
 
-# Use AdminDatabase directly for admin operations
+# Use AdminDatabase for admin operations
 admin_db = AdminDatabase()
-admin_db.set_setting("target_latitude", "50.097416")
+admin_db.add_date_location_filter("2025-01-01", 50.097416, 14.462274, 1.0)
 filters = admin_db.get_all_date_location_filters()
 
-# Use StravaDataDatabase directly for data operations
+# Use StravaDataDatabase for data operations
 data_db = StravaDataDatabase()
 athletes = data_db.get_all_athletes()
-activities = data_db.get_activities_filtered("athlete_123", admin_db)
+activities = data_db.get_activities_filtered("athlete_123", limit=100, activity_type="Run")
 ```
 
-### Package-level imports
+### Package-Level Imports (Recommended)
 
 ```python
 # Import from the databases package root
@@ -92,19 +82,9 @@ from src.databases import AdminDatabase, StravaDataDatabase
 
 admin_db = AdminDatabase()
 data_db = StravaDataDatabase()
-```
 
-### Unified Usage (Backward Compatible)
-
-```python
-# Continue using the unified interface - works exactly as before
-from src.database import StravaDatabase
-db = StravaDatabase()
-
-# All existing methods work exactly the same
-db.set_setting("target_latitude", "50.097416")
-athletes = db.get_all_athletes()
-activities = db.get_activities_filtered("athlete_123")
+# Get activities with filters
+activities = data_db.get_activities_filtered("athlete_123", limit=100, activity_type="Run")
 ```
 
 ## Benefits of the New Structure
@@ -129,61 +109,70 @@ activities = db.get_activities_filtered("athlete_123")
 - Optimize data operations without affecting admin features
 - Easier to extend either part of the system
 
-### 🔄 **Full Backward Compatibility**
-- Existing code continues to work unchanged
-- Gradual migration path for future improvements
-- No breaking changes to the public API
+### 🔄 **Simplified API**
+- Clear separation of concerns with specialized classes
+- Each database class has a focused purpose
+- Easy to understand dependencies between components
 
-## Migration Guide
+## Implementation Guide
 
-### For New Development
-- Use specialized classes directly: `from src.databases import AdminDatabase, StravaDataDatabase`
-- Use the unified class when you need both or want the simplest interface
-
-### For Existing Code
-- **No changes required** - all existing code continues to work
-- `from src.database import StravaDatabase` still works exactly as before
-- Optionally migrate to direct usage of specialized classes for better performance and clarity
-
-### Example Migration
+### Standard Usage Pattern
 
 ```python
-# Before (still works)
-from src.database import StravaDatabase
-db = StravaDatabase()
-activities = db.get_activities_filtered("athlete_123")
-
-# After (recommended for new code)
 from src.databases import AdminDatabase, StravaDataDatabase
+
+# Initialize both database classes
 admin_db = AdminDatabase()
 data_db = StravaDataDatabase()
-activities = data_db.get_activities_filtered("athlete_123", admin_db)
+
+# Use them independently based on your needs
+athletes = data_db.get_all_athletes()
+activities = data_db.get_activities_filtered("athlete_123", limit=100, activity_type="Run")
+location_settings = admin_db.get_location_settings()
+date_filters = admin_db.get_all_date_location_filters()
 ```
 
-## Cross-Class Dependencies
+### Route Setup Pattern
 
-### GPS Filtering
-GPS filtering requires both data and admin components:
-- `StravaDataDatabase.filter_activities()` needs admin settings for location data
-- The unified class handles this automatically
-- Direct usage requires manually passing the admin database instance
-
-### Example:
 ```python
-# Direct usage - manual dependency management
+# In main.py
+from src.databases import AdminDatabase, StravaDataDatabase
+from src.sync_service import ActivitySyncService
+
 admin_db = AdminDatabase()
 data_db = StravaDataDatabase()
-activities = data_db.get_activities_filtered("athlete_123", admin_db)
+sync_service = ActivitySyncService(data_db)
 
-# Unified usage - automatic dependency management
-db = StravaDatabase()
-activities = db.get_activities_filtered("athlete_123")  # admin_db handled internally
+# Pass to route setup functions
+setup_main_routes(app, data_db, admin_db, sync_service)
+setup_admin_routes(app, data_db, admin_db)
 ```
+
+## Component Responsibilities
+
+### AdminDatabase
+Manages all configuration and settings:
+- Default location settings (latitude, longitude, radius)
+- Date-specific location filters
+- Settings management
+
+### StravaDataDatabase
+Manages all athlete and activity data:
+- Athlete records and sync status
+- Activity storage and retrieval
+- Activity filtering by type and date
+
+### Separation of Concerns
+Each database class operates independently:
+- AdminDatabase handles configuration
+- StravaDataDatabase handles data operations
+- When needed, pass instances between components (e.g., in route handlers)
 
 ## Performance Considerations
-- Direct usage of specialized classes has slightly better performance (no delegation overhead)
-- Unified class has minimal overhead and maintains full functionality
-- Database connection overhead is the same regardless of approach
+- Each database class creates independent connections as needed
+- Use context managers (`get_connection()`) for automatic connection cleanup
+- Database operations are optimized with appropriate indexes
+- Activity queries support limits to control result set sizes
 
 ## Future Enhancements
 

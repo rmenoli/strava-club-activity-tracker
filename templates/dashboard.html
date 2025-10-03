@@ -193,7 +193,85 @@
         tr:hover {
             background-color: #4a4a4a;
         }
-        
+
+        /* Location filter match highlighting */
+        tr.location-match {
+            background-color: #1a4d2e !important;
+            border-left: 4px solid #4ade80;
+        }
+
+        tr.location-match:hover {
+            background-color: #25543a !important;
+        }
+
+        .filter-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+
+        .filter-badge.matched {
+            background-color: #4ade80;
+            color: #1a4d2e;
+        }
+
+        .filter-badge.date-specific {
+            background-color: #fbbf24;
+            color: #78350f;
+        }
+
+        .filter-badge.no-match {
+            background-color: #555;
+            color: #ccc;
+        }
+
+        .filter-details {
+            font-size: 11px;
+            color: #aaa;
+        }
+
+        /* Legend */
+        .legend {
+            background-color: #3c3c3c;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .legend-title {
+            font-weight: bold;
+            color: #fc4c02;
+            margin-right: 10px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .legend-box {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+        }
+
+        .legend-box.match {
+            background-color: #1a4d2e;
+            border: 2px solid #4ade80;
+        }
+
+        .legend-box.no-match {
+            background-color: #404040;
+        }
+
         /* Special styling for specific columns */
         .distance-cell {
             color: #fc4c02;
@@ -348,7 +426,25 @@
                 <h2 class="activities-title">🏃 Recent Activities</h2>
                 <div class="activities-count">{{ activities|length }} activities</div>
             </div>
-            
+
+            {% if activities %}
+            <div class="legend">
+                <span class="legend-title">Legend:</span>
+                <div class="legend-item">
+                    <div class="legend-box match"></div>
+                    <span>Matches Location Filter</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-box no-match"></div>
+                    <span>Does Not Match</span>
+                </div>
+                <div class="legend-item">
+                    <span class="filter-badge date-specific">📅 Date Filter</span>
+                    <span>= Date-specific filter applied</span>
+                </div>
+            </div>
+            {% endif %}
+
             {% if activities %}
             <div class="table-container">
                 <table>
@@ -364,7 +460,7 @@
                     </thead>
                     <tbody>
                         {% for activity in activities %}
-                        <tr>
+                        <tr {% if activity.matches_location_filter %}class="location-match"{% endif %}>
                             <td class="date-cell">
                                 {% if activity.start_date %}
                                     {{ activity.start_date[:10] }}
@@ -397,13 +493,24 @@
                                 {% endif %}
                             </td>
                             <td>
-                                {% if activity.filter_source %}
-                                    <span style="color: #fc4c02;">{{ activity.filter_source }}</span>
-                                    {% if activity.start_distance_km %}
-                                        <br><small>{{ activity.start_distance_km }}km from target</small>
+                                {% if activity.filter_info %}
+                                    {% if activity.matches_location_filter %}
+                                        <span class="filter-badge matched">✓ MATCH</span>
+                                    {% else %}
+                                        <span class="filter-badge no-match">✗ No Match</span>
                                     {% endif %}
+
+                                    {% if activity.filter_info.source == 'date_specific' %}
+                                        <span class="filter-badge date-specific">📅 Date Filter</span>
+                                    {% endif %}
+
+                                    <div class="filter-details">
+                                        Start: {{ activity.filter_info.start_distance_km }}km<br>
+                                        End: {{ activity.filter_info.end_distance_km }}km<br>
+                                        Radius: {{ activity.filter_info.radius_km }}km
+                                    </div>
                                 {% else %}
-                                    <span style="color: #888;">No GPS filter</span>
+                                    <span class="filter-badge no-match">No GPS</span>
                                 {% endif %}
                             </td>
                         </tr>

@@ -31,7 +31,7 @@ def setup_main_routes(app, data_db, admin_db, sync_service):
 
         if athlete_id:
             try:
-                # Get activities from database
+                # Get activities from database with location filtering
                 activities = data_db.get_activities_filtered(
                     athlete_id, admin_db, limit=100, activity_type="Run"
                 )  # Limit for performance

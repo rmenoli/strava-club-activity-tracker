@@ -67,6 +67,42 @@ class StravaDataDatabase:
         finally:
             conn.close()
 
+    # ===== GPS UTILITIES =====
+
+    def calculate_distance(
+        self, lat1: float, lon1: float, lat2: float, lon2: float
+    ) -> float:
+        """
+        Calculate the great-circle distance between two points on Earth using the Haversine formula.
+
+        Args:
+            lat1, lon1: Latitude and longitude of first point in degrees
+            lat2, lon2: Latitude and longitude of second point in degrees
+
+        Returns:
+            Distance in kilometers
+        """
+        # Convert degrees to radians
+        lat1_rad = math.radians(lat1)
+        lat2_rad = math.radians(lat2)
+        lon1_rad = math.radians(lon1)
+        lon2_rad = math.radians(lon2)
+
+        # Haversine formula
+        dlat = lat2_rad - lat1_rad
+        dlon = lon2_rad - lon1_rad
+
+        a = (
+            math.sin(dlat / 2) ** 2
+            + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(dlon / 2) ** 2
+        )
+        c = 2 * math.asin(math.sqrt(a))
+
+        # Earth's radius in kilometers
+        earth_radius_km = 6371.0
+
+        return earth_radius_km * c
+
     # ===== ATHLETE MANAGEMENT =====
 
     def upsert_athlete(
@@ -234,21 +270,89 @@ class StravaDataDatabase:
             activities = []
 
             for row in cursor.fetchall():
-                # Convert row to dict and parse raw_data if needed
                 activity = dict(row)
-                if activity["raw_data"]:
-                    # You can merge with raw_data if you need full original data
-                    pass
                 activities.append(activity)
 
             return activities
 
     # ===== ACTIVITY FILTERING =====
 
+    def _apply_location_filter(
+        self, activity: Dict, raw_data: Dict, admin_db
+    ) -> None:
+        """
+        Apply location filtering to an activity and add filter match information.
+
+        Modifies the activity dict in-place to add:
+        - matches_location_filter: Boolean
+        - filter_info: Dict with location, radius, and source information
+
+        Args:
+            activity: Activity dict to modify
+            raw_data: Raw Strava API response data
+            admin_db: AdminDatabase instance for getting location settings
+        """
+        # Initialize filter info
+        activity["matches_location_filter"] = False
+        activity["filter_info"] = None
+
+        # Get GPS coordinates
+        start_latlng = raw_data.get("start_latlng")
+        end_latlng = raw_data.get("end_latlng")
+
+        # Skip if no GPS data
+        if not start_latlng or not end_latlng:
+            return
+
+        # Skip if coordinates are incomplete
+        if len(start_latlng) != 2 or len(end_latlng) != 2:
+            return
+
+        # Get location settings for this activity's date
+        location_settings = admin_db.get_location_settings_for_activity(
+            activity["start_date"]
+        )
+
+        target_lat = location_settings["target_latitude"]
+        target_lon = location_settings["target_longitude"]
+        radius_km = location_settings["filter_radius_km"]
+        filter_source = location_settings["source"]
+
+        # Calculate distances
+        start_distance = self.calculate_distance(
+            start_latlng[0], start_latlng[1], target_lat, target_lon
+        )
+        end_distance = self.calculate_distance(
+            end_latlng[0], end_latlng[1], target_lat, target_lon
+        )
+
+        # Check if BOTH start and end are within radius
+        matches = start_distance <= radius_km and end_distance <= radius_km
+
+        # Add filter information to activity
+        activity["matches_location_filter"] = matches
+        activity["filter_info"] = {
+            "target_location": [target_lat, target_lon],
+            "radius_km": radius_km,
+            "source": filter_source,  # 'default' or 'date_specific'
+            "start_distance_km": round(start_distance, 2),
+            "end_distance_km": round(end_distance, 2),
+        }
+
+        # Add filter date if date-specific
+        if "filter_date" in location_settings:
+            activity["filter_info"]["filter_date"] = location_settings["filter_date"]
+
     def get_activities_filtered(
-        self, athlete_id: str, admin_db, limit: int = None, activity_type: str = None
+        self, athlete_id: str, admin_db=None, limit: int = None, activity_type: str = None
     ) -> List[Dict]:
-        """Get activities with automatically extracted relevant fields from raw_data and apply GPS filtering."""
+        """
+        Get activities with automatically extracted relevant fields from raw_data.
+
+        If admin_db is provided, adds location filter matching information:
+        - matches_location_filter: Boolean indicating if activity matches date-location filter
+        - filter_info: Details about the filter used (location, radius, source)
+        """
         with self.get_connection() as conn:
             query = f"""
                 SELECT activity_id, athlete_id, name, type, start_date, distance, 
@@ -303,6 +407,12 @@ class StravaDataDatabase:
 
                         # Add extracted fields to activity
                         filtered_activity.update(extracted_fields)
+
+                        # Apply location filtering if admin_db is provided
+                        if admin_db:
+                            self._apply_location_filter(
+                                filtered_activity, raw_data, admin_db
+                            )
 
                     except (json.JSONDecodeError, TypeError) as e:
                         # If JSON parsing fails, continue without extracted fields

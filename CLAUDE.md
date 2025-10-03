@@ -29,7 +29,7 @@ source .venv/bin/activate
 ### Environment Setup
 Copy `.env-example` to `.env` and configure:
 - `STRAVA_CLIENT_ID` and `STRAVA_CLIENT_SECRET` - Strava OAuth credentials
-- `STRAVA_REDIRECT_URI` - OAuth callback URL (default: `http://localhost:8000/callback`)
+- `STRAVA_REDIRECT_URI` - OAuth callback URL (default: `http://localhost:8000/auth/strava/callback`)
 - `SECRET_KEY` - Session encryption key
 
 ## Architecture
@@ -44,9 +44,9 @@ The database layer uses specialized classes in `src/databases/`:
 - Key method: `get_location_settings_for_activity(activity_start_date)` - returns location settings with date-specific overrides
 
 **StravaDataDatabase** (`src/databases/strava_data_database.py`)
-- Handles athletes, activities, and GPS-based filtering
+- Handles athletes, activities, and GPS-based location filtering
 - Tables: `athletes`, `activities`
-- Key method: `get_activities_filtered(athlete_id, admin_db, limit, activity_type)` - extracts GPS data from raw JSON and applies inline filtering
+- Key method: `get_activities_filtered(athlete_id, admin_db, limit, activity_type)` - extracts relevant fields from raw JSON, filters by activity type, and applies GPS location matching
 
 **Usage Pattern:**
 ```python
@@ -55,11 +55,15 @@ from src.databases import AdminDatabase, StravaDataDatabase
 admin_db = AdminDatabase()
 data_db = StravaDataDatabase()
 
-# GPS filtering happens inside get_activities_filtered
+# Get filtered activities with location matching
 activities = data_db.get_activities_filtered(athlete_id, admin_db, limit=100, activity_type="Run")
+
+# Each activity includes:
+# - matches_location_filter: Boolean indicating if activity is within the filter radius
+# - filter_info: Details about location, radius, distances, and filter source
 ```
 
-**Important:** The app uses direct instantiation of `AdminDatabase` and `StravaDataDatabase` in `main.py`. These instances are passed to route setup functions.
+**Important:** The app uses direct instantiation of `AdminDatabase` and `StravaDataDatabase` in `main.py`. These instances are passed to route setup functions. There is no unified database class - use the specialized classes directly.
 
 ### Route Organization
 
@@ -91,26 +95,35 @@ Both route modules are registered in `main.py` via `setup_main_routes(app, data_
 - Called during OAuth callback for initial sync
 - Available via manual `/sync` endpoint
 
-### GPS Filtering System
+### GPS-Based Location Filtering System
 
-Activities are filtered by proximity to target coordinates with date-specific overrides:
+The application filters activities based on GPS proximity to configured locations:
 
 **Default Location Settings** (in `settings` table):
 - `target_latitude`, `target_longitude` - Default GPS coordinates (50.097416, 14.462274)
 - `filter_radius_km` - Default search radius (1.0 km)
 
 **Date-Specific Overrides** (in `date_location_filters` table):
-- Activities on specific dates use override coordinates
+- Activities on specific dates can use different coordinates
 - Managed via `/admin/date-filters` interface
 - Each filter has: date, latitude, longitude, radius, optional description
+- Key method: `get_location_settings_for_activity(activity_date)` returns appropriate settings based on date
 
-**Filtering Implementation:**
-- Happens inline within `StravaDataDatabase.get_activities_filtered()`
-- Extracts GPS coordinates from `raw_data` JSON field
-- Uses `admin_db.get_location_settings_for_activity(activity_date)` to get date-specific or default settings
-- Applies Haversine formula to calculate distances
-- Filters where BOTH start and end points are within radius
-- **Current filter:** Only "Run" activities (hardcoded in `main_routes.py:36`)
+**How GPS Filtering Works:**
+1. `StravaDataDatabase.get_activities_filtered()` extracts GPS coordinates from `raw_data` JSON
+2. For each activity, gets location settings for its date (default or date-specific)
+3. Uses Haversine formula to calculate distances from start and end points to target location
+4. Activity matches filter if BOTH start AND end points are within the radius
+5. Adds `matches_location_filter` flag and `filter_info` dict to each activity
+6. Dashboard highlights matching activities with green background
+
+**Visual Feedback:**
+- Matching activities: Green background with checkmark badge
+- Non-matching activities: Normal background with X badge
+- Date-specific filters: Yellow "Date Filter" badge
+- GPS Info column: Shows distances from start/end to target
+
+**Current Activity Type Filter:** Only "Run" activities (hardcoded in `main_routes.py:36`)
 
 ## Key Patterns
 
@@ -148,10 +161,10 @@ def setup_main_routes(app, data_db, admin_db, sync_service):
     @app.get("/")
     async def index(request: Request):
         # Has access to data_db, admin_db, sync_service via closure
-        activities = data_db.get_activities_filtered(athlete_id, admin_db)
+        activities = data_db.get_activities_filtered(athlete_id, admin_db, limit=100, activity_type="Run")
 ```
 
-This pattern avoids global state and makes dependencies explicit.
+This pattern avoids global state and makes dependencies explicit. Note that `admin_db` is passed to `get_activities_filtered()` to enable GPS location filtering.
 
 ## Database Schema
 
@@ -224,13 +237,20 @@ In `get_activities_filtered()`, these fields are extracted and added to each act
 
 1. **Activity Type Filtering:** Currently hardcoded to "Run" in `main_routes.py:36`. Change the `activity_type` parameter to filter different activity types or remove it to show all.
 
-2. **GPS Filtering:** Inline within `get_activities_filtered()`. The method extracts GPS coords from JSON, gets location settings from admin_db, and filters in a single operation.
+2. **GPS Location Filtering:** The `get_activities_filtered()` method performs GPS filtering inline:
+   - Extracts `start_latlng` and `end_latlng` from `raw_data` JSON
+   - Gets location settings for activity date (default or date-specific override)
+   - Calculates distances using Haversine formula
+   - Requires BOTH start and end points within radius to match
+   - Activities without GPS coordinates are marked as "No GPS"
 
-3. **Sync Strategy:** First-time login syncs from 2025-01-01. Subsequent syncs use latest activity date minus 1 day to catch updates.
+3. **Dashboard Visual Feedback:** Matching activities are highlighted with green background and show detailed distance information in the GPS Info column.
 
-4. **Database Path:** All database classes default to `strava_data.db` in the project root. Pass `db_path` parameter to use a different location.
+4. **Sync Strategy:** First-time login syncs from 2025-01-01. Subsequent syncs use latest activity date minus 1 day to catch updates.
 
-5. **Templates:** Jinja2 templates in `templates/` directory. Currently 5 templates: `index.html`, `dashboard.html`, `admin.html`, `admin_date_filters.html`, `admin_settings.html` (last one unused after recent refactor).
+5. **Database Path:** All database classes default to `strava_data.db` in the project root. Pass `db_path` parameter to use a different location.
+
+6. **Templates:** Jinja2 templates in `templates/` directory. Currently 5 templates: `index.html`, `dashboard.html`, `admin.html`, `admin_date_filters.html`, `admin_settings.html` (last one unused after recent refactor).
 
 ## Testing with Jupyter
 
