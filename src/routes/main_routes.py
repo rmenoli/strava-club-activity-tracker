@@ -37,8 +37,8 @@ def setup_main_routes(app, data_db, admin_db, sync_service):
                 )  # Limit for performance
 
                 if activities:
-                    # Get athlete summary stats
-                    summary = sync_service.get_athlete_summary(athlete_id)
+                    # Get athlete summary stats (filtered by location)
+                    summary = data_db.get_athlete_summary(athlete_id, admin_db)
 
                     return templates.TemplateResponse(
                         "dashboard.html",

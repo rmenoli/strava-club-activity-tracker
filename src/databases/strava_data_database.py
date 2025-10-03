@@ -173,27 +173,67 @@ class StravaDataDatabase:
         age_hours = (datetime.now() - last_sync).total_seconds() / 3600
         return age_hours > max_age_hours
 
-    def get_athlete_stats(self, athlete_id: str) -> Dict:
-        """Get summary stats for an athlete."""
-        with self.get_connection() as conn:
-            cursor = conn.execute(
-                """
-                SELECT 
-                    COUNT(*) as total_activities,
-                    SUM(distance) as total_distance,
-                    SUM(moving_time) as total_moving_time,
-                    AVG(distance) as avg_distance,
-                    MIN(start_date) as first_activity,
-                    MAX(start_date) as last_activity,
-                    COUNT(DISTINCT type) as activity_types
-                FROM activities 
-                WHERE athlete_id = ?
-            """,
-                (athlete_id,),
-            )
+    def get_athlete_stats(self, athlete_id: str, admin_db=None) -> Dict:
+        """
+        Get summary stats for an athlete.
 
-            result = cursor.fetchone()
-            return dict(result) if result else {}
+        If admin_db is provided, only counts activities that match location filters.
+        """
+        if not admin_db:
+            # No filtering - use simple SQL query
+            with self.get_connection() as conn:
+                cursor = conn.execute(
+                    """
+                    SELECT
+                        COUNT(*) as total_activities,
+                        SUM(distance) as total_distance,
+                        SUM(moving_time) as total_moving_time
+                    FROM activities
+                    WHERE athlete_id = ?
+                """,
+                    (athlete_id,),
+                )
+                result = cursor.fetchone()
+                return dict(result) if result else {}
+
+        # With location filtering - get all activities and filter in Python
+        activities = self.get_activities_filtered(athlete_id, admin_db)
+
+        # Filter to only matching activities
+        matching_activities = [a for a in activities if a.get("matches_location_filter", False)]
+
+        # Calculate stats
+        total_activities = len(matching_activities)
+        total_distance = sum(a.get("distance", 0) for a in matching_activities)
+        total_moving_time = sum(a.get("moving_time", 0) for a in matching_activities)
+
+        return {
+            "total_activities": total_activities,
+            "total_distance": total_distance,
+            "total_moving_time": total_moving_time,
+        }
+
+    def get_athlete_summary(self, athlete_id: str, admin_db=None) -> dict:
+        """
+        Get a summary of athlete's activities and sync status.
+
+        If admin_db is provided, stats will only include activities matching location filters.
+        """
+        stats = self.get_athlete_stats(athlete_id, admin_db)
+        last_sync = self.get_athlete_last_sync(athlete_id)
+        needs_sync = self.needs_sync(athlete_id)
+
+        return {
+            "athlete_id": athlete_id,
+            "stats": stats,
+            "last_sync": last_sync.isoformat() if last_sync else None,
+            "needs_sync": needs_sync,
+            "sync_age_hours": (
+                (datetime.now() - last_sync).total_seconds() / 3600
+                if last_sync
+                else None
+            ),
+        }
 
     # ===== ACTIVITY MANAGEMENT =====
 
@@ -277,9 +317,7 @@ class StravaDataDatabase:
 
     # ===== ACTIVITY FILTERING =====
 
-    def _apply_location_filter(
-        self, activity: Dict, raw_data: Dict, admin_db
-    ) -> None:
+    def _apply_location_filter(self, activity: Dict, raw_data: Dict, admin_db) -> None:
         """
         Apply location filtering to an activity and add filter match information.
 
@@ -344,7 +382,11 @@ class StravaDataDatabase:
             activity["filter_info"]["filter_date"] = location_settings["filter_date"]
 
     def get_activities_filtered(
-        self, athlete_id: str, admin_db=None, limit: int = None, activity_type: str = None
+        self,
+        athlete_id: str,
+        admin_db=None,
+        limit: int = None,
+        activity_type: str = None,
     ) -> List[Dict]:
         """
         Get activities with automatically extracted relevant fields from raw_data.

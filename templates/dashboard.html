@@ -367,18 +367,7 @@
                         {% endif %}
                     </div>
                 </div>
-                
-                <div class="stat-item">
-                    <div class="stat-label">Average Distance</div>
-                    <div class="stat-value">
-                        {% if summary.stats.avg_distance %}
-                            {{ "%.1f"|format(summary.stats.avg_distance / 1000) }} km
-                        {% else %}
-                            0 km
-                        {% endif %}
-                    </div>
-                </div>
-                
+
                 <div class="stat-item">
                     <div class="stat-label">Total Moving Time</div>
                     <div class="stat-value">
@@ -389,25 +378,6 @@
                         {% endif %}
                     </div>
                 </div>
-                
-                <div class="stat-item">
-                    <div class="stat-label">Activity Types</div>
-                    <div class="stat-value">{{ summary.stats.activity_types or 0 }}</div>
-                </div>
-                
-                {% if summary.stats.first_activity %}
-                <div class="stat-item">
-                    <div class="stat-label">First Activity</div>
-                    <div class="stat-value">{{ summary.stats.first_activity[:10] }}</div>
-                </div>
-                {% endif %}
-                
-                {% if summary.stats.last_activity %}
-                <div class="stat-item">
-                    <div class="stat-label">Last Activity</div>
-                    <div class="stat-value">{{ summary.stats.last_activity[:10] }}</div>
-                </div>
-                {% endif %}
             </div>
             {% endif %}
             

@@ -120,21 +120,3 @@ class ActivitySyncService:
         client.expires_at = token_data["expires_at"]
 
         return self.sync_athlete_activities(athlete_id, client)
-
-    def get_athlete_summary(self, athlete_id: str) -> dict:
-        """Get a summary of athlete's activities and sync status."""
-        stats = self.db.get_athlete_stats(athlete_id)
-        last_sync = self.db.get_athlete_last_sync(athlete_id)
-        needs_sync = self.should_sync(athlete_id)
-
-        return {
-            "athlete_id": athlete_id,
-            "stats": stats,
-            "last_sync": last_sync.isoformat() if last_sync else None,
-            "needs_sync": needs_sync,
-            "sync_age_hours": (
-                (datetime.now() - last_sync).total_seconds() / 3600
-                if last_sync
-                else None
-            ),
-        }

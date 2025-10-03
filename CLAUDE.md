@@ -22,21 +22,21 @@ uv sync
 # Add a new dependency
 uv add <package-name>
 
-# Activate virtual environment
+# Activate virtual environment (if needed)
 source .venv/bin/activate
 ```
 
 ### Environment Setup
 Copy `.env-example` to `.env` and configure:
 - `STRAVA_CLIENT_ID` and `STRAVA_CLIENT_SECRET` - Strava OAuth credentials
-- `STRAVA_REDIRECT_URI` - OAuth callback URL (default: `http://localhost:8000/auth/strava/callback`)
+- `STRAVA_REDIRECT_URI` - OAuth callback URL (default: `http://localhost:8000/callback`)
 - `SECRET_KEY` - Session encryption key
 
 ## Architecture
 
 ### Database Layer (Specialized Classes)
 
-The database layer uses specialized classes in `src/databases/`:
+The database layer uses two specialized classes in `src/databases/`:
 
 **AdminDatabase** (`src/databases/admin_database.py`)
 - Manages location configurations and date-specific location filters
@@ -44,9 +44,12 @@ The database layer uses specialized classes in `src/databases/`:
 - Key method: `get_location_settings_for_activity(activity_start_date)` - returns location settings with date-specific overrides
 
 **StravaDataDatabase** (`src/databases/strava_data_database.py`)
-- Handles athletes, activities, and GPS-based location filtering
+- Handles athletes, activities, GPS-based location filtering, and statistics
 - Tables: `athletes`, `activities`
-- Key method: `get_activities_filtered(athlete_id, admin_db, limit, activity_type)` - extracts relevant fields from raw JSON, filters by activity type, and applies GPS location matching
+- Key methods:
+  - `get_activities_filtered(athlete_id, admin_db, limit, activity_type)` - extracts relevant fields from raw JSON, filters by activity type, and applies GPS location matching
+  - `get_athlete_stats(athlete_id, admin_db)` - calculates statistics; if `admin_db` provided, only counts activities matching location filters
+  - `get_athlete_summary(athlete_id, admin_db)` - returns stats with sync status; if `admin_db` provided, stats are filtered by location
 
 **Usage Pattern:**
 ```python
@@ -61,6 +64,10 @@ activities = data_db.get_activities_filtered(athlete_id, admin_db, limit=100, ac
 # Each activity includes:
 # - matches_location_filter: Boolean indicating if activity is within the filter radius
 # - filter_info: Details about location, radius, distances, and filter source
+
+# Get statistics filtered by location
+summary = data_db.get_athlete_summary(athlete_id, admin_db)
+# Returns: total_activities, total_distance, total_moving_time (all filtered by location)
 ```
 
 **Important:** The app uses direct instantiation of `AdminDatabase` and `StravaDataDatabase` in `main.py`. These instances are passed to route setup functions. There is no unified database class - use the specialized classes directly.
@@ -94,6 +101,7 @@ Both route modules are registered in `main.py` via `setup_main_routes(app, data_
 - Intelligently calculates sync start date based on last sync and latest activity
 - Called during OAuth callback for initial sync
 - Available via manual `/sync` endpoint
+- **Note:** Statistics and display logic belong in `StravaDataDatabase`, not in the sync service
 
 ### GPS-Based Location Filtering System
 
@@ -112,10 +120,13 @@ The application filters activities based on GPS proximity to configured location
 **How GPS Filtering Works:**
 1. `StravaDataDatabase.get_activities_filtered()` extracts GPS coordinates from `raw_data` JSON
 2. For each activity, gets location settings for its date (default or date-specific)
-3. Uses Haversine formula to calculate distances from start and end points to target location
+3. Uses Haversine formula (`calculate_distance()`) to calculate distances from start and end points to target location
 4. Activity matches filter if BOTH start AND end points are within the radius
 5. Adds `matches_location_filter` flag and `filter_info` dict to each activity
 6. Dashboard highlights matching activities with green background
+
+**Filtered Statistics:**
+When `admin_db` is passed to `get_athlete_stats()` or `get_athlete_summary()`, statistics only include activities that match the location filter. This is used on the dashboard to show filtered stats alongside filtered activities.
 
 **Visual Feedback:**
 - Matching activities: Green background with checkmark badge
@@ -162,9 +173,10 @@ def setup_main_routes(app, data_db, admin_db, sync_service):
     async def index(request: Request):
         # Has access to data_db, admin_db, sync_service via closure
         activities = data_db.get_activities_filtered(athlete_id, admin_db, limit=100, activity_type="Run")
+        summary = data_db.get_athlete_summary(athlete_id, admin_db)
 ```
 
-This pattern avoids global state and makes dependencies explicit. Note that `admin_db` is passed to `get_activities_filtered()` to enable GPS location filtering.
+This pattern avoids global state and makes dependencies explicit. Note that `admin_db` is passed to both `get_activities_filtered()` and `get_athlete_summary()` to enable GPS location filtering for both activities and statistics.
 
 ## Database Schema
 
@@ -244,14 +256,26 @@ In `get_activities_filtered()`, these fields are extracted and added to each act
    - Requires BOTH start and end points within radius to match
    - Activities without GPS coordinates are marked as "No GPS"
 
-3. **Dashboard Visual Feedback:** Matching activities are highlighted with green background and show detailed distance information in the GPS Info column.
+3. **Filtered Statistics:** When `admin_db` is passed to `get_athlete_stats()` or `get_athlete_summary()`, the returned statistics only count activities that match the location filter. This ensures dashboard stats reflect only the filtered activities shown.
 
-4. **Sync Strategy:** First-time login syncs from 2025-01-01. Subsequent syncs use latest activity date minus 1 day to catch updates.
+4. **Dashboard Display:** Dashboard shows 3 statistics (total activities, total distance, total moving time) - all filtered by location when `admin_db` is provided. Matching activities are highlighted with green background and show detailed distance information in the GPS Info column.
 
-5. **Database Path:** All database classes default to `strava_data.db` in the project root. Pass `db_path` parameter to use a different location.
+5. **Sync Strategy:** First-time login syncs from 2025-01-01. Subsequent syncs use latest activity date minus 1 day to catch updates.
 
-6. **Templates:** Jinja2 templates in `templates/` directory. Currently 5 templates: `index.html`, `dashboard.html`, `admin.html`, `admin_date_filters.html`, `admin_settings.html` (last one unused after recent refactor).
+6. **Database Path:** All database classes default to `strava_data.db` in the project root. Pass `db_path` parameter to use a different location.
 
-## Testing with Jupyter
+7. **Templates:** Jinja2 templates in `templates/` directory. Dashboard template expects `summary.stats` with: `total_activities`, `total_distance`, `total_moving_time`.
 
-The `notebooks/` directory contains Jupyter notebooks for data analysis. Notebooks reference the StravaDatabase class but this is only for documentation - actual analysis uses pandas with direct SQLite queries.
+## Separation of Concerns
+
+**Data retrieval and display logic** belongs in `StravaDataDatabase`:
+- `get_athlete_stats()` - calculate statistics
+- `get_athlete_summary()` - combine stats with sync status
+- `get_activities_filtered()` - retrieve and filter activities
+
+**Synchronization logic** belongs in `ActivitySyncService`:
+- `sync_athlete_activities()` - sync activities with Strava API
+- `should_sync()` - determine if sync is needed
+- `get_sync_start_date()` - calculate optimal sync date range
+
+When adding new features, place data/stats methods in the database layer and sync/API methods in the sync service.
