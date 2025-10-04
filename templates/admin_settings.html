@@ -12,7 +12,7 @@
             line-height: 1.6;
         }
         .container {
-            max-width: 800px;
+            max-width: 1200px;
             margin: 0 auto;
             background-color: #3c3c3c;
             padding: 30px;
@@ -87,7 +87,7 @@
         }
         .help-text {
             font-size: 12px;
-            color: #666;
+            color: #aaaaaa;
             margin-top: 5px;
         }
         .coordinates-input {
@@ -181,11 +181,11 @@
                 </thead>
                 <tbody>
                     {% for setting in settings %}
-                    <tr style="border-bottom: 1px solid #ddd;">
+                    <tr style="border-bottom: 1px solid #555555;">
                         <td style="padding: 10px; font-family: monospace;">{{ setting.key }}</td>
                         <td style="padding: 10px; font-weight: bold;">{{ setting.value }}</td>
                         <td style="padding: 10px;">{{ setting.description or 'No description' }}</td>
-                        <td style="padding: 10px; font-size: 12px; color: #666;">
+                        <td style="padding: 10px; font-size: 12px; color: #aaaaaa;">
                             {{ setting.updated_at[:19].replace('T', ' ') if setting.updated_at else 'Unknown' }}
                         </td>
                     </tr>

@@ -12,7 +12,7 @@
             line-height: 1.6;
         }
         .container {
-            max-width: 1000px;
+            max-width: 1200px;
             margin: 0 auto;
             background-color: #3c3c3c;
             padding: 30px;
@@ -96,14 +96,15 @@
             font-size: 12px;
         }
         .default-info {
-            background-color: #e7f3ff;
+            background-color: #454545;
             padding: 15px;
             border-radius: 4px;
             margin-bottom: 20px;
+            border: 1px solid #fc4c02;
         }
         .help-text {
             font-size: 12px;
-            color: #666;
+            color: #aaaaaa;
             margin-top: 5px;
         }
         table {
@@ -134,7 +135,7 @@
         }
         .no-filters {
             text-align: center;
-            color: #666;
+            color: #aaaaaa;
             font-style: italic;
             padding: 40px;
         }
@@ -245,7 +246,7 @@
                         </td>
                         <td>{{ filter.radius_km }} km</td>
                         <td>{{ filter.description or '-' }}</td>
-                        <td style="font-size: 11px; color: #666;">
+                        <td style="font-size: 11px; color: #aaaaaa;">
                             {{ filter.created_at[:10] if filter.created_at else 'Unknown' }}
                         </td>
                         <td>
