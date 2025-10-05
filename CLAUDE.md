@@ -42,12 +42,54 @@ source .venv/bin/activate
 
 ### Environment Setup
 Copy `.env-example` to `.env` and configure:
-- `STRAVA_CLIENT_ID` and `STRAVA_CLIENT_SECRET` - Strava OAuth credentials
-- `STRAVA_REDIRECT_URI` - OAuth callback URL (default: `http://localhost:8000/callback`)
-- `SECRET_KEY` - Session encryption key
-- `DATABASE_URL` - PostgreSQL connection string (default: `postgresql://postgres:postgres@localhost:5432/strava_tracker`)
+- `STRAVA_CLIENT_ID` and `STRAVA_CLIENT_SECRET` - Strava OAuth credentials (required)
+- `STRAVA_REDIRECT_URI` - OAuth callback URL (optional, default: `http://localhost:8000/callback`)
+- `SECRET_KEY` - Session encryption key (optional, default: `dev-secret`)
+- `DATABASE_URL` - PostgreSQL connection string (required)
+
+**Configuration Management:**
+All environment variables are loaded and validated at application startup using a centralized `Config` class (`src/config.py`). Missing required variables will cause the application to exit immediately with a clear error message listing what's missing. This eliminates runtime configuration errors and ensures all required settings are present before the application starts.
 
 ## Architecture
+
+### Configuration Management
+
+The application uses a centralized configuration system (`src/config.py`) built with `python-dotenv`:
+
+**Config Class:**
+- Uses `load_dotenv()` to load `.env` file at startup
+- Validates required fields (DATABASE_URL, STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET)
+- Provides type-annotated access to configuration values
+- Fails fast with helpful error messages if validation fails
+
+**Implementation:**
+```python
+class Config:
+    def __init__(self):
+        load_dotenv()  # Load .env file
+        self.DATABASE_URL = self._get_required("DATABASE_URL")
+        self.STRAVA_CLIENT_ID = self._get_required("STRAVA_CLIENT_ID")
+        # ... validates required vars, exits if missing
+```
+
+**Usage Pattern:**
+```python
+from src.config import load_config
+
+# Load and validate configuration (in main.py)
+config = load_config()  # Exits if validation fails
+
+# Access configuration values
+database_url = config.DATABASE_URL
+client_id = config.STRAVA_CLIENT_ID
+```
+
+**Benefits:**
+- Single source of truth for all environment variables
+- Validation happens once at startup, not scattered throughout the code
+- Type-annotated configuration access for IDE support
+- Clear error messages for missing configuration
+- No external dependencies beyond python-dotenv (already installed)
 
 ### Database Layer (Specialized Classes)
 
@@ -68,12 +110,15 @@ The database layer uses two specialized classes in `src/databases/`:
 
 **Usage Pattern:**
 ```python
-import os
+from src.config import load_config
 from src.databases import AdminDatabase, StravaDataDatabase
 
-database_url = os.getenv("DATABASE_URL")
-admin_db = AdminDatabase(database_url)
-data_db = StravaDataDatabase(database_url)
+# Load configuration (validates all required env vars)
+config = load_config()
+
+# Initialize databases
+admin_db = AdminDatabase(config.DATABASE_URL)
+data_db = StravaDataDatabase(config.DATABASE_URL)
 
 # Get filtered activities with location matching
 activities = data_db.get_activities_filtered(athlete_id, admin_db, limit=100, activity_type="Run")
@@ -87,7 +132,7 @@ summary = data_db.get_athlete_summary(athlete_id, admin_db)
 # Returns: total_activities, total_distance, total_moving_time (all filtered by location)
 ```
 
-**Important:** Both database classes require a `DATABASE_URL` parameter (PostgreSQL connection string). The app will fail immediately if `DATABASE_URL` is not set in the environment. There is no SQLite fallback - use the specialized classes directly with PostgreSQL.
+**Important:** Both database classes require a `DATABASE_URL` parameter (PostgreSQL connection string). Use the centralized `Config` class to load and validate configuration - the app will fail immediately with a helpful error if any required environment variable is missing. There is no SQLite fallback - use the specialized classes directly with PostgreSQL.
 
 ### Route Organization
 
@@ -159,20 +204,18 @@ When `admin_db` is passed to `get_athlete_stats()` or `get_athlete_summary()`, s
 
 ```python
 # In main.py
-import os
+from src.config import load_config
 from src.databases.admin_database import AdminDatabase
 from src.databases.strava_data_database import StravaDataDatabase
 from src.sync_service import ActivitySyncService
 
-# DATABASE_URL is required - app will exit if not set
-database_url = os.getenv("DATABASE_URL")
-if not database_url:
-    print("ERROR: DATABASE_URL environment variable is not set")
-    sys.exit(1)
+# Load and validate configuration - exits if any required env vars are missing
+config = load_config()
 
-admin_db = AdminDatabase(database_url)  # Initializes settings and date_location_filters tables
-data_db = StravaDataDatabase(database_url)  # Initializes athletes and activities tables
-sync_service = ActivitySyncService(data_db)
+# Initialize database and sync service
+admin_db = AdminDatabase(config.DATABASE_URL)  # Initializes settings and date_location_filters tables
+data_db = StravaDataDatabase(config.DATABASE_URL)  # Initializes athletes and activities tables
+sync_service = ActivitySyncService(data_db, config)  # Needs config for Strava API credentials
 ```
 
 ### OAuth Token Management
@@ -192,15 +235,20 @@ Token lifecycle:
 
 Routes use dependency injection via closure:
 ```python
-def setup_main_routes(app, data_db, admin_db, sync_service):
+def setup_main_routes(app, data_db, admin_db, sync_service, config):
     @app.get("/")
     async def index(request: Request):
-        # Has access to data_db, admin_db, sync_service via closure
+        # Has access to data_db, admin_db, sync_service, config via closure
         activities = data_db.get_activities_filtered(athlete_id, admin_db, limit=100, activity_type="Run")
         summary = data_db.get_athlete_summary(athlete_id, admin_db)
+
+    @app.get("/login")
+    async def login():
+        # Can access Strava credentials from config
+        auth_url = f"https://www.strava.com/oauth/authorize?client_id={config.STRAVA_CLIENT_ID}..."
 ```
 
-This pattern avoids global state and makes dependencies explicit. Note that `admin_db` is passed to both `get_activities_filtered()` and `get_athlete_summary()` to enable GPS location filtering for both activities and statistics.
+This pattern avoids global state and makes dependencies explicit. Configuration values are accessed through the `config` parameter, which provides type-safe access to environment variables. Note that `admin_db` is passed to both `get_activities_filtered()` and `get_athlete_summary()` to enable GPS location filtering for both activities and statistics.
 
 ### Static Files and Frontend
 
@@ -345,7 +393,7 @@ In `get_activities_filtered()`, these fields are extracted and added to each act
 
 5. **Sync Strategy:** First-time login syncs from 2025-01-01. Subsequent syncs use latest activity date minus 1 day to catch updates.
 
-6. **Database Connection:** Both database classes require `DATABASE_URL` environment variable. The app will fail immediately if PostgreSQL is unavailable - no fallback or retry logic.
+6. **Configuration Validation:** All required environment variables (DATABASE_URL, STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET) are validated at application startup via the `Config` class. The app will fail immediately with a helpful error message if any required configuration is missing - no fallback or runtime errors.
 
 7. **Templates & Static Files:**
    - Jinja2 templates in `templates/` directory

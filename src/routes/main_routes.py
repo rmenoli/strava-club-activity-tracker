@@ -2,12 +2,11 @@
 Non-admin routes: login, index, callback, logout, sync_activities, download_csv, stats
 """
 
-import os
-
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
+from src.config import Config
 from src.databases.admin_database import AdminDatabase
 from src.databases.strava_data_database import StravaDataDatabase
 from src.store_token import load_tokens, save_tokens
@@ -22,11 +21,9 @@ def setup_main_routes(
     data_db: StravaDataDatabase,
     admin_db: AdminDatabase,
     sync_service: ActivitySyncService,
+    config: Config,
 ) -> None:
     """Setup main application routes (non-admin)"""
-
-    client_id = os.getenv("STRAVA_CLIENT_ID")
-    client_secret = os.getenv("STRAVA_CLIENT_SECRET")
 
     @app.get("/", response_class=HTMLResponse)
     async def index(request: Request):
@@ -72,11 +69,10 @@ def setup_main_routes(
 
     @app.get("/login")
     async def login():
-        redirect_uri = os.getenv("REDIRECT_URI", "http://localhost:8000/callback")
         auth_url = (
             f"https://www.strava.com/oauth/authorize?"
-            f"client_id={client_id}&response_type=code&"
-            f"redirect_uri={redirect_uri}&scope=activity:read_all"
+            f"client_id={config.STRAVA_CLIENT_ID}&response_type=code&"
+            f"redirect_uri={config.STRAVA_REDIRECT_URI}&scope=activity:read_all"
         )
         return RedirectResponse(auth_url)
 
@@ -84,7 +80,7 @@ def setup_main_routes(
     async def callback(request: Request, code: str):
         print(f"Callback received with code: {code[:10]}...")
 
-        client = StravaClient(client_id, client_secret)
+        client = StravaClient(config.STRAVA_CLIENT_ID, config.STRAVA_CLIENT_SECRET)
         athlete_id = client.exchange_code_for_tokens(code)
 
         print(f"Got athlete_id: {athlete_id}")

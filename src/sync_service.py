@@ -1,14 +1,21 @@
 from datetime import datetime, timedelta
 from typing import Optional
 
+from src.config import Config
 from src.store_token import load_tokens
 from src.strava_client import StravaClient
 
 
 class ActivitySyncService:
-    def __init__(self, db):
-        """Initialize with a database instance (AdminDatabase or StravaDataDatabase)."""
+    def __init__(self, db, config: Config):
+        """Initialize with a database instance and configuration.
+
+        Args:
+            db: Database instance (AdminDatabase or StravaDataDatabase)
+            config: Application configuration instance
+        """
         self.db = db
+        self.config = config
 
     def should_sync(self, athlete_id: str) -> bool:
         """Determine if we should sync activities for this athlete."""
@@ -96,22 +103,10 @@ class ActivitySyncService:
                 "error": "No stored tokens found for athlete",
             }
 
-        # Create client with environment variables
-        import os
-
-        from dotenv import load_dotenv
-
-        load_dotenv()
-        client_id = os.getenv("STRAVA_CLIENT_ID")
-        client_secret = os.getenv("STRAVA_CLIENT_SECRET")
-
-        if not client_id or not client_secret:
-            return {
-                "synced": False,
-                "error": "Strava client credentials not configured",
-            }
-
-        client = StravaClient(client_id, client_secret)
+        # Create client with credentials from config
+        client = StravaClient(
+            self.config.STRAVA_CLIENT_ID, self.config.STRAVA_CLIENT_SECRET
+        )
 
         # Load the stored tokens
         token_data = tokens[athlete_id]
