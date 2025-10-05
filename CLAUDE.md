@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A FastAPI web application that tracks Strava club activities with GPS-based filtering. Athletes authenticate via OAuth, sync their activities, and view filtered results based on configurable location criteria. Admins can manage date-specific location filters and view aggregate data across all athletes.
 
+**Tech Stack:** FastAPI, SQLite, Jinja2 templates, vanilla CSS (no frontend framework)
+
 ## Development Commands
 
 ### Running the Application
@@ -178,6 +180,55 @@ def setup_main_routes(app, data_db, admin_db, sync_service):
 
 This pattern avoids global state and makes dependencies explicit. Note that `admin_db` is passed to both `get_activities_filtered()` and `get_athlete_summary()` to enable GPS location filtering for both activities and statistics.
 
+### Static Files and Frontend
+
+**Static File Serving:**
+```python
+# In main.py
+from fastapi.staticfiles import StaticFiles
+app.mount("/static", StaticFiles(directory="static"), name="static")
+```
+
+**Directory Structure:**
+```
+static/
+  css/
+    style.css  # Consolidated styles for all templates (718 lines, 16KB)
+templates/
+  index.html              # Welcome/login page
+  dashboard.html          # User activity dashboard
+  admin.html              # Admin multi-athlete view
+  admin_date_filters.html # Date filter management
+  admin_settings.html     # Location settings
+```
+
+**CSS Architecture:**
+- All templates link to `/static/css/style.css` (no inline styles)
+- Organized into sections: reset, typography, containers, navigation, buttons, stats, tables, forms, filters, responsive
+- Uses page-specific body classes: `welcome-page`, `dashboard-page`
+- Color scheme: Strava orange (#fc4c02) on dark background (#2c2c2c)
+- Responsive breakpoints: 1200px (tablet), 768px (mobile)
+
+**Template Pattern:**
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Page Title</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="page-specific-class">
+    <!-- Jinja2 template content -->
+</body>
+</html>
+```
+
+**When modifying styles:**
+- Edit `static/css/style.css` (affects all pages)
+- Use existing CSS classes when possible
+- Add page-specific classes to body element for page-specific overrides
+- Browser caching: CSS is cached after first load
+
 ## Database Schema
 
 ### Core Tables
@@ -264,7 +315,11 @@ In `get_activities_filtered()`, these fields are extracted and added to each act
 
 6. **Database Path:** All database classes default to `strava_data.db` in the project root. Pass `db_path` parameter to use a different location.
 
-7. **Templates:** Jinja2 templates in `templates/` directory. Dashboard template expects `summary.stats` with: `total_activities`, `total_distance`, `total_moving_time`.
+7. **Templates & Static Files:**
+   - Jinja2 templates in `templates/` directory
+   - All styles consolidated in `static/css/style.css`
+   - Dashboard template expects `summary.stats` with: `total_activities`, `total_distance`, `total_moving_time`
+   - Templates use external CSS (no inline `<style>` blocks)
 
 ## Separation of Concerns
 
@@ -278,4 +333,14 @@ In `get_activities_filtered()`, these fields are extracted and added to each act
 - `should_sync()` - determine if sync is needed
 - `get_sync_start_date()` - calculate optimal sync date range
 
-When adding new features, place data/stats methods in the database layer and sync/API methods in the sync service.
+**Presentation logic** belongs in templates and CSS:
+- Jinja2 templates in `templates/` handle HTML structure
+- `static/css/style.css` handles all styling (no inline styles)
+- Templates receive data from routes, routes get data from database layer
+
+When adding new features:
+- Data/stats methods → `StravaDataDatabase`
+- Sync/API methods → `ActivitySyncService`
+- Route handlers → `src/routes/`
+- Visual styling → `static/css/style.css`
+- HTML structure → `templates/`

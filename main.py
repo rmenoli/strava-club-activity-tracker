@@ -2,6 +2,7 @@ import os
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -19,6 +20,9 @@ sync_service = ActivitySyncService(data_db)
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
+
+# Mount static files
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Session middleware (cookie-based session storage)
 app.add_middleware(
