@@ -27,7 +27,10 @@ class StravaDataDatabase:
                         last_name TEXT,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         last_sync TIMESTAMP,
-                        total_activities INTEGER DEFAULT 0
+                        total_activities INTEGER DEFAULT 0,
+                        access_token TEXT,
+                        refresh_token TEXT,
+                        token_expires_at BIGINT
                     )
                 """)
 
@@ -59,6 +62,25 @@ class StravaDataDatabase:
                 cursor.execute("""
                     CREATE INDEX IF NOT EXISTS idx_activity_date
                     ON activities (start_date)
+                """)
+
+                # Add token columns if they don't exist (for existing databases)
+                cursor.execute("""
+                    DO $$
+                    BEGIN
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                                      WHERE table_name='athletes' AND column_name='access_token') THEN
+                            ALTER TABLE athletes ADD COLUMN access_token TEXT;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                                      WHERE table_name='athletes' AND column_name='refresh_token') THEN
+                            ALTER TABLE athletes ADD COLUMN refresh_token TEXT;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                                      WHERE table_name='athletes' AND column_name='token_expires_at') THEN
+                            ALTER TABLE athletes ADD COLUMN token_expires_at BIGINT;
+                        END IF;
+                    END $$;
                 """)
 
                 conn.commit()
@@ -139,6 +161,59 @@ class StravaDataDatabase:
                 result = cursor.fetchone()
                 if result and result["last_sync"]:
                     return datetime.fromisoformat(str(result["last_sync"]))
+                return None
+
+    def save_athlete_tokens(
+        self, athlete_id: str, access_token: str, refresh_token: str, expires_at: int
+    ):
+        """Save or update Strava OAuth tokens for an athlete.
+
+        Args:
+            athlete_id: Strava athlete ID
+            access_token: Strava access token
+            refresh_token: Strava refresh token
+            expires_at: Token expiration timestamp (Unix timestamp)
+        """
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    UPDATE athletes
+                    SET access_token = %s,
+                        refresh_token = %s,
+                        token_expires_at = %s
+                    WHERE athlete_id = %s
+                """,
+                    (access_token, refresh_token, expires_at, athlete_id),
+                )
+                conn.commit()
+
+    def get_athlete_tokens(self, athlete_id: str) -> Optional[Dict]:
+        """Get Strava OAuth tokens for an athlete.
+
+        Args:
+            athlete_id: Strava athlete ID
+
+        Returns:
+            Dict with access_token, refresh_token, expires_at or None if not found
+        """
+        with self.get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+                cursor.execute(
+                    """
+                    SELECT access_token, refresh_token, token_expires_at
+                    FROM athletes
+                    WHERE athlete_id = %s
+                """,
+                    (athlete_id,),
+                )
+                result = cursor.fetchone()
+                if result and result["access_token"]:
+                    return {
+                        "access_token": result["access_token"],
+                        "refresh_token": result["refresh_token"],
+                        "expires_at": result["token_expires_at"],
+                    }
                 return None
 
     def get_latest_activity_date(self, athlete_id: str) -> Optional[datetime]:
@@ -488,6 +563,6 @@ class StravaDataDatabase:
                                 f"Warning: Could not parse raw_data for activity {activity['activity_id']}: {e}"
                             )
 
-                activities.append(filtered_activity)
+                    activities.append(filtered_activity)
 
             return activities

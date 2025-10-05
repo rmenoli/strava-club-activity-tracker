@@ -25,7 +25,7 @@ class Config:
 
         # Optional configuration with defaults
         self.STRAVA_REDIRECT_URI: str = os.getenv(
-            "STRAVA_REDIRECT_URI", "http://localhost:8000/callback"
+            "STRAVA_REDIRECT_URI", "http://localhost:8000/auth/strava/callback"
         )
         self.SECRET_KEY: str = os.getenv("SECRET_KEY", "dev-secret")
 
@@ -69,7 +69,7 @@ def load_config() -> Config:
         print("  - STRAVA_CLIENT_ID (required)")
         print("  - STRAVA_CLIENT_SECRET (required)")
         print(
-            "  - STRAVA_REDIRECT_URI (optional, defaults to http://localhost:8000/callback)"
+            "  - STRAVA_REDIRECT_URI (optional, defaults to http://localhost:8000/auth/strava/callback)"
         )
         print("  - SECRET_KEY (optional, defaults to 'dev-secret')")
         print("\nCopy .env-example to .env and fill in the values.")

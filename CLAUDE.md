@@ -43,7 +43,7 @@ source .venv/bin/activate
 ### Environment Setup
 Copy `.env-example` to `.env` and configure:
 - `STRAVA_CLIENT_ID` and `STRAVA_CLIENT_SECRET` - Strava OAuth credentials (required)
-- `STRAVA_REDIRECT_URI` - OAuth callback URL (optional, default: `http://localhost:8000/callback`)
+- `STRAVA_REDIRECT_URI` - OAuth callback URL (optional, default: `http://localhost:8000/auth/strava/callback`)
 - `SECRET_KEY` - Session encryption key (optional, default: `dev-secret`)
 - `DATABASE_URL` - PostgreSQL connection string (required)
 
@@ -141,7 +141,7 @@ Routes are organized by functionality in `src/routes/`:
 **main_routes.py**: User-facing routes
 - `/` - Dashboard (shows filtered activities for logged-in athlete)
 - `/login` - Strava OAuth login
-- `/callback` - OAuth callback, syncs activities on first login
+- `/auth/strava/callback` - OAuth callback, syncs activities on first login
 - `/sync` - Manual sync trigger
 - `/download` - Export activities as CSV
 - Session-based authentication using `request.session["athlete_id"]`
@@ -222,14 +222,15 @@ sync_service = ActivitySyncService(data_db, config)  # Needs config for Strava A
 
 Tokens are stored in two places:
 1. **Session storage**: For active web sessions (`request.session["athlete_id"]`)
-2. **File storage**: `strava_tokens.json` for persistent storage and manual sync
+2. **Database storage**: In the `athletes` table (`access_token`, `refresh_token`, `token_expires_at` columns)
 
 Token lifecycle:
-- OAuth callback: Stores tokens in both session and file
+- OAuth callback: Stores tokens in both session and database via `data_db.save_athlete_tokens()`
 - Activity fetch: `StravaClient.ensure_valid_token()` automatically refreshes if expired
-- Manual sync: `ActivitySyncService.sync_athlete_with_stored_tokens()` loads from file
+- Manual sync: `ActivitySyncService.sync_athlete_with_stored_tokens()` loads from database
+- Token refresh: Updated tokens are automatically saved back to database after each sync
 
-**Important:** Refresh tokens are rotated by Strava on each refresh - always save updated tokens.
+**Important:** Refresh tokens are rotated by Strava on each refresh - the sync service automatically saves updated tokens to the database after each sync operation.
 
 ### Route Setup Pattern
 
@@ -310,6 +311,9 @@ templates/
 - `first_name`, `last_name` - Athlete names
 - `last_sync` (TIMESTAMP) - Last successful sync time
 - `total_activities` (INTEGER) - Cached activity count
+- `access_token` (TEXT) - Strava OAuth access token
+- `refresh_token` (TEXT) - Strava OAuth refresh token
+- `token_expires_at` (BIGINT) - Token expiration timestamp (Unix epoch)
 
 **activities**
 - `activity_id` (BIGINT, PK) - Strava activity ID
@@ -374,7 +378,7 @@ In `get_activities_filtered()`, these fields are extracted and added to each act
 - Automatic via `StravaClient.ensure_valid_token()`
 - Handles 401 errors with automatic retry
 - Updates refresh token after each refresh (Strava rotates them)
-- Save updated tokens via `save_tokens()` from `src/store_token.py`
+- Refreshed tokens are automatically saved to database by `ActivitySyncService` after each sync
 
 ## Important Implementation Details
 

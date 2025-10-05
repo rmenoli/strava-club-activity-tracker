@@ -9,7 +9,6 @@ from fastapi.templating import Jinja2Templates
 from src.config import Config
 from src.databases.admin_database import AdminDatabase
 from src.databases.strava_data_database import StravaDataDatabase
-from src.store_token import load_tokens, save_tokens
 from src.strava_client import StravaClient
 from src.sync_service import ActivitySyncService
 
@@ -76,7 +75,7 @@ def setup_main_routes(
         )
         return RedirectResponse(auth_url)
 
-    @app.get("/callback")
+    @app.get("/auth/strava/callback")
     async def callback(request: Request, code: str):
         print(f"Callback received with code: {code[:10]}...")
 
@@ -91,20 +90,17 @@ def setup_main_routes(
                 "<h3>Error: Failed to get athlete ID. Please try again.</h3>"
             )
 
-        tokens = load_tokens()
-        tokens[athlete_id] = {
-            "access_token": client.access_token,
-            "refresh_token": client.refresh_token,
-            "expires_at": client.expires_at,
-        }
-        save_tokens(tokens)
-
-        # store session
+        # Store session
         request.session["athlete_id"] = athlete_id
         print(f"Session set with athlete_id: {request.session.get('athlete_id')}")
 
         # Register athlete in database (upsert)
         data_db.upsert_athlete(athlete_id)
+
+        # Save OAuth tokens to database
+        data_db.save_athlete_tokens(
+            athlete_id, client.access_token, client.refresh_token, client.expires_at
+        )
 
         # Smart sync: only sync if needed
         try:
