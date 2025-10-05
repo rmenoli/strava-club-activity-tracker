@@ -4,17 +4,25 @@ Non-admin routes: login, index, callback, logout, sync_activities, download_csv,
 
 import os
 
-from fastapi import Request
+from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
+from src.databases.admin_database import AdminDatabase
+from src.databases.strava_data_database import StravaDataDatabase
 from src.store_token import load_tokens, save_tokens
 from src.strava_client import StravaClient
+from src.sync_service import ActivitySyncService
 
 templates = Jinja2Templates(directory="templates")
 
 
-def setup_main_routes(app, data_db, admin_db, sync_service):
+def setup_main_routes(
+    app: FastAPI,
+    data_db: StravaDataDatabase,
+    admin_db: AdminDatabase,
+    sync_service: ActivitySyncService,
+) -> None:
     """Setup main application routes (non-admin)"""
 
     client_id = os.getenv("STRAVA_CLIENT_ID")

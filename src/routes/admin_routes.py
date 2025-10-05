@@ -4,14 +4,19 @@ Admin routes: admin dashboard, settings, date filters
 
 from datetime import datetime
 
-from fastapi import Request
+from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+
+from src.databases.admin_database import AdminDatabase
+from src.databases.strava_data_database import StravaDataDatabase
 
 templates = Jinja2Templates(directory="templates")
 
 
-def setup_admin_routes(app, data_db, admin_db):
+def setup_admin_routes(
+    app: FastAPI, data_db: StravaDataDatabase, admin_db: AdminDatabase
+) -> None:
     """Setup admin routes"""
 
     @app.get("/admin")

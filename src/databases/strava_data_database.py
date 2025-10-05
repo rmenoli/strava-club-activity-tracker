@@ -5,6 +5,8 @@ from contextlib import contextmanager
 from datetime import datetime
 from typing import Dict, List, Optional
 
+from src.databases.admin_database import AdminDatabase
+
 
 class StravaDataDatabase:
     """Database operations for core Strava data: athletes, activities, and GPS filtering."""
@@ -173,7 +175,9 @@ class StravaDataDatabase:
         age_hours = (datetime.now() - last_sync).total_seconds() / 3600
         return age_hours > max_age_hours
 
-    def get_athlete_stats(self, athlete_id: str, admin_db=None) -> Dict:
+    def get_athlete_stats(
+        self, athlete_id: str, admin_db: AdminDatabase = None
+    ) -> Dict:
         """
         Get summary stats for an athlete.
 
@@ -200,7 +204,9 @@ class StravaDataDatabase:
         activities = self.get_activities_filtered(athlete_id, admin_db)
 
         # Filter to only matching activities
-        matching_activities = [a for a in activities if a.get("matches_location_filter", False)]
+        matching_activities = [
+            a for a in activities if a.get("matches_location_filter", False)
+        ]
 
         # Calculate stats
         total_activities = len(matching_activities)
@@ -213,7 +219,9 @@ class StravaDataDatabase:
             "total_moving_time": total_moving_time,
         }
 
-    def get_athlete_summary(self, athlete_id: str, admin_db=None) -> dict:
+    def get_athlete_summary(
+        self, athlete_id: str, admin_db: AdminDatabase = None
+    ) -> dict:
         """
         Get a summary of athlete's activities and sync status.
 
@@ -317,7 +325,9 @@ class StravaDataDatabase:
 
     # ===== ACTIVITY FILTERING =====
 
-    def _apply_location_filter(self, activity: Dict, raw_data: Dict, admin_db) -> None:
+    def _apply_location_filter(
+        self, activity: Dict, raw_data: Dict, admin_db: AdminDatabase
+    ) -> None:
         """
         Apply location filtering to an activity and add filter match information.
 
@@ -384,7 +394,7 @@ class StravaDataDatabase:
     def get_activities_filtered(
         self,
         athlete_id: str,
-        admin_db=None,
+        admin_db: AdminDatabase = None,
         limit: int = None,
         activity_type: str = None,
     ) -> List[Dict]:
