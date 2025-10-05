@@ -99,7 +99,11 @@
                         <tr {% if activity.matches_location_filter %}class="location-match"{% endif %}>
                             <td class="date-cell">
                                 {% if activity.start_date %}
-                                    {{ activity.start_date[:10] }}
+                                    {% if activity.start_date is string %}
+                                        {{ activity.start_date[:10] }}
+                                    {% else %}
+                                        {{ activity.start_date.strftime('%Y-%m-%d') }}
+                                    {% endif %}
                                 {% else %}
                                     -
                                 {% endif %}

@@ -1,63 +1,67 @@
-import sqlite3
+import psycopg2
 from contextlib import contextmanager
+from psycopg2.extras import RealDictCursor
 from typing import Dict, List, Optional
 
 
 class AdminDatabase:
     """Database operations for admin settings, configurations, and date-based location filters."""
 
-    def __init__(self, db_path: str = "strava_data.db"):
-        self.db_path = db_path
+    def __init__(self, db_url: str):
+        self.db_url = db_url
         self.init_admin_tables()
 
     def init_admin_tables(self):
         """Initialize admin-related database tables."""
-        with sqlite3.connect(self.db_path) as conn:
-            # Settings table for configurable parameters
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS settings (
-                    key TEXT PRIMARY KEY,
-                    value TEXT,
-                    description TEXT,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                # Settings table for configurable parameters
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS settings (
+                        key TEXT PRIMARY KEY,
+                        value TEXT,
+                        description TEXT,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
 
-            # Insert default location settings if they don't exist
-            conn.execute("""
-                INSERT OR IGNORE INTO settings (key, value, description) 
-                VALUES 
-                    ('target_latitude', '50.097416', 'Default target location latitude for activity filtering'),
-                    ('target_longitude', '14.462274', 'Default target location longitude for activity filtering'),
-                    ('filter_radius_km', '1.0', 'Default radius in kilometers for location filtering')
-            """)
+                # Insert default location settings if they don't exist
+                cursor.execute("""
+                    INSERT INTO settings (key, value, description)
+                    VALUES
+                        ('target_latitude', '50.097416', 'Default target location latitude for activity filtering'),
+                        ('target_longitude', '14.462274', 'Default target location longitude for activity filtering'),
+                        ('filter_radius_km', '1.0', 'Default radius in kilometers for location filtering')
+                    ON CONFLICT (key) DO NOTHING
+                """)
 
-            # Date-based location filters table
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS date_location_filters (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    filter_date DATE NOT NULL,
-                    target_latitude REAL NOT NULL,
-                    target_longitude REAL NOT NULL,
-                    radius_km REAL NOT NULL DEFAULT 1.0,
-                    description TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(filter_date)
-                )
-            """)
+                # Date-based location filters table
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS date_location_filters (
+                        id SERIAL PRIMARY KEY,
+                        filter_date DATE NOT NULL,
+                        target_latitude REAL NOT NULL,
+                        target_longitude REAL NOT NULL,
+                        radius_km REAL NOT NULL DEFAULT 1.0,
+                        description TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE(filter_date)
+                    )
+                """)
 
-            # Index for date-based lookups
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_date_filters_date 
-                ON date_location_filters (filter_date)
-            """)
+                # Index for date-based lookups
+                cursor.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_date_filters_date
+                    ON date_location_filters (filter_date)
+                """)
+
+                conn.commit()
 
     @contextmanager
     def get_connection(self):
         """Context manager for database connections."""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row  # Enable dict-like access
+        conn = psycopg2.connect(self.db_url)
         try:
             yield conn
         finally:
@@ -68,9 +72,10 @@ class AdminDatabase:
     def get_setting(self, key: str, default_value: str = None) -> Optional[str]:
         """Get a setting value by key."""
         with self.get_connection() as conn:
-            cursor = conn.execute("SELECT value FROM settings WHERE key = ?", (key,))
-            result = cursor.fetchone()
-            return result["value"] if result else default_value
+            with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+                cursor.execute("SELECT value FROM settings WHERE key = %s", (key,))
+                result = cursor.fetchone()
+                return result["value"] if result else default_value
 
     # ===== LOCATION SETTINGS =====
 
@@ -96,48 +101,58 @@ class AdminDatabase:
     ) -> None:
         """Add or update a date-based location filter."""
         with self.get_connection() as conn:
-            conn.execute(
-                """
-                INSERT OR REPLACE INTO date_location_filters 
-                (filter_date, target_latitude, target_longitude, radius_km, description, updated_at)
-                VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-            """,
-                (filter_date, latitude, longitude, radius_km, description),
-            )
-            conn.commit()
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO date_location_filters
+                    (filter_date, target_latitude, target_longitude, radius_km, description, updated_at)
+                    VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                    ON CONFLICT (filter_date) DO UPDATE SET
+                        target_latitude = EXCLUDED.target_latitude,
+                        target_longitude = EXCLUDED.target_longitude,
+                        radius_km = EXCLUDED.radius_km,
+                        description = EXCLUDED.description,
+                        updated_at = CURRENT_TIMESTAMP
+                """,
+                    (filter_date, latitude, longitude, radius_km, description),
+                )
+                conn.commit()
 
     def get_date_location_filter(self, filter_date: str) -> Optional[Dict]:
         """Get location filter for a specific date."""
         with self.get_connection() as conn:
-            cursor = conn.execute(
-                """
-                SELECT filter_date, target_latitude, target_longitude, radius_km, description
-                FROM date_location_filters 
-                WHERE filter_date = ?
-            """,
-                (filter_date,),
-            )
-            result = cursor.fetchone()
-            return dict(result) if result else None
+            with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+                cursor.execute(
+                    """
+                    SELECT filter_date, target_latitude, target_longitude, radius_km, description
+                    FROM date_location_filters
+                    WHERE filter_date = %s
+                """,
+                    (filter_date,),
+                )
+                result = cursor.fetchone()
+                return dict(result) if result else None
 
     def get_all_date_location_filters(self) -> List[Dict]:
         """Get all date-based location filters."""
         with self.get_connection() as conn:
-            cursor = conn.execute("""
-                SELECT filter_date, target_latitude, target_longitude, radius_km, description, created_at, updated_at
-                FROM date_location_filters 
-                ORDER BY filter_date DESC
-            """)
-            return [dict(row) for row in cursor.fetchall()]
+            with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+                cursor.execute("""
+                    SELECT filter_date, target_latitude, target_longitude, radius_km, description, created_at, updated_at
+                    FROM date_location_filters
+                    ORDER BY filter_date DESC
+                """)
+                return [dict(row) for row in cursor.fetchall()]
 
     def delete_date_location_filter(self, filter_date: str) -> None:
         """Delete a date-based location filter."""
         with self.get_connection() as conn:
-            conn.execute(
-                "DELETE FROM date_location_filters WHERE filter_date = ?",
-                (filter_date,),
-            )
-            conn.commit()
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    "DELETE FROM date_location_filters WHERE filter_date = %s",
+                    (filter_date,),
+                )
+                conn.commit()
 
     def get_location_settings_for_activity(self, activity_start_date: str) -> Dict:
         """Get location settings for a specific activity based on its date."""

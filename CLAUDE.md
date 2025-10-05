@@ -6,9 +6,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A FastAPI web application that tracks Strava club activities with GPS-based filtering. Athletes authenticate via OAuth, sync their activities, and view filtered results based on configurable location criteria. Admins can manage date-specific location filters and view aggregate data across all athletes.
 
-**Tech Stack:** FastAPI, SQLite, Jinja2 templates, vanilla CSS (no frontend framework)
+**Tech Stack:** FastAPI, PostgreSQL, Jinja2 templates, vanilla CSS (no frontend framework)
 
 ## Development Commands
+
+### Database Setup
+```bash
+# Start PostgreSQL via Docker Compose
+docker-compose up -d
+
+# Stop PostgreSQL
+docker-compose down
+
+# Stop and remove all data
+docker-compose down -v
+```
 
 ### Running the Application
 ```bash
@@ -33,6 +45,7 @@ Copy `.env-example` to `.env` and configure:
 - `STRAVA_CLIENT_ID` and `STRAVA_CLIENT_SECRET` - Strava OAuth credentials
 - `STRAVA_REDIRECT_URI` - OAuth callback URL (default: `http://localhost:8000/callback`)
 - `SECRET_KEY` - Session encryption key
+- `DATABASE_URL` - PostgreSQL connection string (default: `postgresql://postgres:postgres@localhost:5432/strava_tracker`)
 
 ## Architecture
 
@@ -55,10 +68,12 @@ The database layer uses two specialized classes in `src/databases/`:
 
 **Usage Pattern:**
 ```python
+import os
 from src.databases import AdminDatabase, StravaDataDatabase
 
-admin_db = AdminDatabase()
-data_db = StravaDataDatabase()
+database_url = os.getenv("DATABASE_URL")
+admin_db = AdminDatabase(database_url)
+data_db = StravaDataDatabase(database_url)
 
 # Get filtered activities with location matching
 activities = data_db.get_activities_filtered(athlete_id, admin_db, limit=100, activity_type="Run")
@@ -72,7 +87,7 @@ summary = data_db.get_athlete_summary(athlete_id, admin_db)
 # Returns: total_activities, total_distance, total_moving_time (all filtered by location)
 ```
 
-**Important:** The app uses direct instantiation of `AdminDatabase` and `StravaDataDatabase` in `main.py`. These instances are passed to route setup functions. There is no unified database class - use the specialized classes directly.
+**Important:** Both database classes require a `DATABASE_URL` parameter (PostgreSQL connection string). The app will fail immediately if `DATABASE_URL` is not set in the environment. There is no SQLite fallback - use the specialized classes directly with PostgreSQL.
 
 ### Route Organization
 
@@ -144,12 +159,19 @@ When `admin_db` is passed to `get_athlete_stats()` or `get_athlete_summary()`, s
 
 ```python
 # In main.py
+import os
 from src.databases.admin_database import AdminDatabase
 from src.databases.strava_data_database import StravaDataDatabase
 from src.sync_service import ActivitySyncService
 
-admin_db = AdminDatabase()  # Initializes settings and date_location_filters tables
-data_db = StravaDataDatabase()  # Initializes athletes and activities tables
+# DATABASE_URL is required - app will exit if not set
+database_url = os.getenv("DATABASE_URL")
+if not database_url:
+    print("ERROR: DATABASE_URL environment variable is not set")
+    sys.exit(1)
+
+admin_db = AdminDatabase(database_url)  # Initializes settings and date_location_filters tables
+data_db = StravaDataDatabase(database_url)  # Initializes athletes and activities tables
 sync_service = ActivitySyncService(data_db)
 ```
 
@@ -231,6 +253,8 @@ templates/
 
 ## Database Schema
 
+**Database:** PostgreSQL (required, no SQLite fallback)
+
 ### Core Tables
 
 **athletes**
@@ -240,7 +264,7 @@ templates/
 - `total_activities` (INTEGER) - Cached activity count
 
 **activities**
-- `activity_id` (INTEGER, PK) - Strava activity ID
+- `activity_id` (BIGINT, PK) - Strava activity ID
 - `athlete_id` (TEXT, FK) - References athletes
 - `name`, `type`, `start_date` - Basic activity info
 - `distance`, `moving_time`, `elapsed_time` - Performance metrics
@@ -253,6 +277,7 @@ templates/
 - Default keys: `target_latitude`, `target_longitude`, `filter_radius_km`
 
 **date_location_filters**
+- `id` (SERIAL, PK) - Auto-incrementing ID
 - `filter_date` (DATE, UNIQUE) - Date for location override (YYYY-MM-DD)
 - `target_latitude`, `target_longitude`, `radius_km` - Override coordinates
 - `description` (TEXT) - Optional description
@@ -261,6 +286,13 @@ templates/
 - `idx_athlete_activities` on `activities(athlete_id, start_date)`
 - `idx_activity_date` on `activities(start_date)`
 - `idx_date_filters_date` on `date_location_filters(filter_date)`
+
+### SQL Syntax Notes
+The codebase uses PostgreSQL-specific syntax:
+- Placeholders: `%s` (not `?`)
+- UPSERT: `INSERT ... ON CONFLICT ... DO UPDATE SET`
+- Auto-increment: `SERIAL` or `BIGINT` with sequences
+- All queries use `psycopg2` with `RealDictCursor` for dict-like row access
 
 ## Session Management
 
@@ -313,7 +345,7 @@ In `get_activities_filtered()`, these fields are extracted and added to each act
 
 5. **Sync Strategy:** First-time login syncs from 2025-01-01. Subsequent syncs use latest activity date minus 1 day to catch updates.
 
-6. **Database Path:** All database classes default to `strava_data.db` in the project root. Pass `db_path` parameter to use a different location.
+6. **Database Connection:** Both database classes require `DATABASE_URL` environment variable. The app will fail immediately if PostgreSQL is unavailable - no fallback or retry logic.
 
 7. **Templates & Static Files:**
    - Jinja2 templates in `templates/` directory

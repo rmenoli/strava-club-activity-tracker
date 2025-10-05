@@ -62,14 +62,14 @@
                     <td>{{ athlete.total_activities or 0 }}</td>
                     <td>
                         {% if athlete.last_sync %}
-                            {{ athlete.last_sync[:19].replace('T', ' ') }}
+                            {{ athlete.last_sync.strftime('%Y-%m-%d %H:%M:%S') if athlete.last_sync is not string else athlete.last_sync[:19].replace('T', ' ') }}
                         {% else %}
                             <em>Never</em>
                         {% endif %}
                     </td>
                     <td>
                         {% if athlete.created_at %}
-                            {{ athlete.created_at[:10] }}
+                            {{ athlete.created_at.strftime('%Y-%m-%d') if athlete.created_at is not string else athlete.created_at[:10] }}
                         {% else %}
                             <em>Unknown</em>
                         {% endif %}

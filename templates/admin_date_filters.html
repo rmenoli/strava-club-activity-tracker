@@ -97,7 +97,11 @@
                         <td>{{ filter.radius_km }} km</td>
                         <td>{{ filter.description or '-' }}</td>
                         <td style="font-size: 11px; color: #aaaaaa;">
-                            {{ filter.created_at[:10] if filter.created_at else 'Unknown' }}
+                            {% if filter.created_at %}
+                                {{ filter.created_at.strftime('%Y-%m-%d') if filter.created_at is not string else filter.created_at[:10] }}
+                            {% else %}
+                                Unknown
+                            {% endif %}
                         </td>
                         <td>
                             <form method="post" action="/admin/date-filters/delete/{{ filter.filter_date }}" 

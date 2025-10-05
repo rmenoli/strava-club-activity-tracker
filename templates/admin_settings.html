@@ -85,7 +85,11 @@
                         <td style="padding: 10px; font-weight: bold;">{{ setting.value }}</td>
                         <td style="padding: 10px;">{{ setting.description or 'No description' }}</td>
                         <td style="padding: 10px; font-size: 12px; color: #aaaaaa;">
-                            {{ setting.updated_at[:19].replace('T', ' ') if setting.updated_at else 'Unknown' }}
+                            {% if setting.updated_at %}
+                                {{ setting.updated_at.strftime('%Y-%m-%d %H:%M:%S') if setting.updated_at is not string else setting.updated_at[:19].replace('T', ' ') }}
+                            {% else %}
+                                Unknown
+                            {% endif %}
                         </td>
                     </tr>
                     {% endfor %}

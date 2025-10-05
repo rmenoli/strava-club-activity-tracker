@@ -1,4 +1,5 @@
 import os
+import sys
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
@@ -13,9 +14,16 @@ from src.sync_service import ActivitySyncService
 
 load_dotenv()
 
+# Get DATABASE_URL from environment
+database_url = os.getenv("DATABASE_URL")
+if not database_url:
+    print("ERROR: DATABASE_URL environment variable is not set")
+    print("Please set DATABASE_URL in your .env file")
+    sys.exit(1)
+
 # Initialize database and sync service
-admin_db = AdminDatabase()
-data_db = StravaDataDatabase()
+admin_db = AdminDatabase(database_url)
+data_db = StravaDataDatabase(database_url)
 sync_service = ActivitySyncService(data_db)
 
 app = FastAPI()

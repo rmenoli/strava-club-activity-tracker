@@ -10,6 +10,7 @@ dependencies = [
     "jinja2>=3.1.6",
     "jupyterlab>=4.4.9",
     "pandas>=2.3.2",
+    "psycopg2-binary>=2.9.10",
     "python-dotenv>=1.1.1",
     "python-multipart>=0.0.20",
     "requests>=2.32.5",
