@@ -32,7 +32,8 @@ class AdminDatabase:
                         ('target_latitude', '50.097416', 'Default target location latitude for activity filtering'),
                         ('target_longitude', '14.462274', 'Default target location longitude for activity filtering'),
                         ('filter_radius_km', '1.0', 'Default radius in kilometers for location filtering'),
-                        ('activity_filter_days', '90', 'Number of days of activity history to include in statistics')
+                        ('activity_filter_days', '90', 'Number of days of activity history to include in statistics'),
+                        ('discount_threshold_activities', '5', 'Minimum number of activities required to access discount features')
                     ON CONFLICT (key) DO NOTHING
                 """)
 
@@ -107,6 +108,26 @@ class AdminDatabase:
                         updated_at = CURRENT_TIMESTAMP
                 """,
                     (str(days),),
+                )
+                conn.commit()
+
+    def get_discount_threshold(self) -> int:
+        """Get the minimum number of activities required to access discount features."""
+        return int(self.get_setting("discount_threshold_activities", "5"))
+
+    def update_discount_threshold(self, threshold: int) -> None:
+        """Update the minimum number of activities required to access discount features."""
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO settings (key, value, updated_at)
+                    VALUES ('discount_threshold_activities', %s, CURRENT_TIMESTAMP)
+                    ON CONFLICT (key) DO UPDATE SET
+                        value = EXCLUDED.value,
+                        updated_at = CURRENT_TIMESTAMP
+                """,
+                    (str(threshold),),
                 )
                 conn.commit()
 

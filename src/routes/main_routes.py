@@ -42,6 +42,9 @@ def setup_main_routes(
                     # Get the activity filter days setting
                     activity_filter_days = admin_db.get_activity_filter_days()
 
+                    # Get the discount threshold setting
+                    discount_threshold = admin_db.get_discount_threshold()
+
                     return templates.TemplateResponse(
                         "dashboard.html",
                         {
@@ -50,6 +53,7 @@ def setup_main_routes(
                             "activities": activities,
                             "summary": summary,
                             "activity_filter_days": activity_filter_days,
+                            "discount_threshold": discount_threshold,
                         },
                     )
                 else:
@@ -108,6 +112,25 @@ def setup_main_routes(
     async def logout(request: Request):
         request.session.clear()
         return RedirectResponse("/")
+
+    @app.get("/discounts")
+    async def discounts(request: Request):
+        """Discounts and rewards page for active athletes."""
+        athlete_id = request.session.get("athlete_id")
+        if not athlete_id:
+            return RedirectResponse("/login")
+
+        # Get athlete summary to show stats on discounts page
+        summary = data_db.get_athlete_summary(athlete_id, admin_db)
+
+        return templates.TemplateResponse(
+            "discount.html",
+            {
+                "request": request,
+                "athlete_id": athlete_id,
+                "summary": summary,
+            },
+        )
 
     @app.get("/sync")
     async def sync_activities(request: Request):

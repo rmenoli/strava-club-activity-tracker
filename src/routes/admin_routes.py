@@ -133,12 +133,14 @@ def setup_admin_routes(
     async def admin_settings(request: Request):
         """Admin page for managing general settings."""
         activity_filter_days = admin_db.get_activity_filter_days()
+        discount_threshold = admin_db.get_discount_threshold()
 
         return templates.TemplateResponse(
             "admin_settings.html",
             {
                 "request": request,
                 "activity_filter_days": activity_filter_days,
+                "discount_threshold": discount_threshold,
             },
         )
 
@@ -149,16 +151,21 @@ def setup_admin_routes(
 
         try:
             days = int(form_data.get("activity_filter_days", 90))
+            threshold = int(form_data.get("discount_threshold", 5))
 
             # Validate input
             if not (1 <= days <= 365):
                 raise ValueError("Activity filter days must be between 1 and 365")
+            if not (1 <= threshold <= 100):
+                raise ValueError("Discount threshold must be between 1 and 100")
 
             admin_db.update_activity_filter_days(days)
+            admin_db.update_discount_threshold(threshold)
 
             return HTMLResponse(f"""
                 <h3>✅ Settings updated successfully!</h3>
                 <p>Activity filter period: {days} days</p>
+                <p>Discount access threshold: {threshold} activities</p>
                 <p><a href='/admin/settings'>Back to Settings</a> | <a href='/admin'>Admin Dashboard</a></p>
             """)
 

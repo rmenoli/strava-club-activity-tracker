@@ -96,9 +96,14 @@ client_id = config.STRAVA_CLIENT_ID
 The database layer uses two specialized classes in `src/databases/`:
 
 **AdminDatabase** (`src/databases/admin_database.py`)
-- Manages location configurations and date-specific location filters
+- Manages location configurations, date-specific location filters, and general settings
 - Tables: `settings`, `date_location_filters`
-- Key method: `get_location_settings_for_activity(activity_start_date)` - returns location settings with date-specific overrides
+- Key methods:
+  - `get_location_settings_for_activity(activity_start_date)` - returns location settings with date-specific overrides
+  - `get_activity_filter_days()` - returns the configured number of days for activity history filtering
+  - `update_activity_filter_days(days)` - updates the time period filter setting
+  - `get_discount_threshold()` - returns the minimum activities required for discount access
+  - `update_discount_threshold(threshold)` - updates the discount threshold setting
 
 **StravaDataDatabase** (`src/databases/strava_data_database.py`)
 - Handles athletes, activities, GPS-based location filtering, and statistics
@@ -144,16 +149,20 @@ Routes are organized by functionality in `src/routes/`:
 - `/auth/strava/callback` - OAuth callback, syncs activities on first login
 - `/sync` - Manual sync trigger
 - `/download` - Export activities as CSV
+- `/discounts` - Rewards page for active athletes (5+ activities)
+- `/logout` - Clear session and redirect to home
 - Session-based authentication using `request.session["athlete_id"]`
 
 **admin_routes.py**: Administrative interface
 - `/admin` - Multi-athlete dashboard with sync status
+- `/admin/settings` - General settings management (activity filter days)
+- `/admin/settings/update` - Update general settings (POST)
 - `/admin/date-filters` - Manage date-specific location filters
 - `/admin/date-filters/add` - Add new date filter (POST)
 - `/admin/date-filters/delete/{date}` - Delete date filter (POST)
 - `/api/date-filters` - JSON API for date filters
 
-Both route modules are registered in `main.py` via `setup_main_routes(app, data_db, admin_db, sync_service)` and `setup_admin_routes(app, data_db, admin_db)`.
+Both route modules are registered in `main.py` via `setup_main_routes(app, data_db, admin_db, sync_service, config)` and `setup_admin_routes(app, data_db, admin_db)`.
 
 ### Activity Sync Service
 
@@ -172,6 +181,8 @@ The application filters activities based on GPS proximity to configured location
 **Default Location Settings** (in `settings` table):
 - `target_latitude`, `target_longitude` - Default GPS coordinates (50.097416, 14.462274)
 - `filter_radius_km` - Default search radius (1.0 km)
+- `activity_filter_days` - Number of days of activity history to include in statistics (default: 90)
+- `discount_threshold_activities` - Minimum activities required for discount access (default: 5)
 
 **Date-Specific Overrides** (in `date_location_filters` table):
 - Activities on specific dates can use different coordinates
@@ -187,8 +198,12 @@ The application filters activities based on GPS proximity to configured location
 5. Adds `matches_location_filter` flag and `filter_info` dict to each activity
 6. Dashboard highlights matching activities with green background
 
-**Filtered Statistics:**
-When `admin_db` is passed to `get_athlete_stats()` or `get_athlete_summary()`, statistics only include activities that match the location filter. This is used on the dashboard to show filtered stats alongside filtered activities.
+**Filtered Statistics (Time + Location):**
+When `admin_db` is passed to `get_athlete_stats()` or `get_athlete_summary()`, statistics are filtered by:
+1. **Time period**: Only activities within the last N days (configurable via `activity_filter_days` setting in `/admin/settings`)
+2. **Location**: Only activities matching the GPS location filter (start AND end points within radius)
+
+This two-level filtering ensures dashboard stats reflect only relevant, recent activities that match the configured location criteria. The time filter is displayed in the dashboard title (e.g., "Activities With PRC (Last 90 days)").
 
 **Visual Feedback:**
 - Matching activities: Green background with checkmark badge
@@ -269,8 +284,9 @@ templates/
   index.html              # Welcome/login page
   dashboard.html          # User activity dashboard
   admin.html              # Admin multi-athlete view
-  admin_date_filters.html # Date filter management
-  admin_settings.html     # Location settings
+  admin_settings.html     # General settings (activity filter days)
+  admin_date_filters.html # Date-specific location filter management
+  discount.html           # Rewards/discounts page (future feature placeholder)
 ```
 
 **CSS Architecture:**
@@ -326,7 +342,7 @@ templates/
 **settings**
 - `key` (TEXT, PK) - Setting name
 - `value` (TEXT) - Setting value (always stored as string)
-- Default keys: `target_latitude`, `target_longitude`, `filter_radius_km`
+- Default keys: `target_latitude`, `target_longitude`, `filter_radius_km`, `activity_filter_days`, `discount_threshold_activities`
 
 **date_location_filters**
 - `id` (SERIAL, PK) - Auto-incrementing ID
@@ -391,18 +407,29 @@ In `get_activities_filtered()`, these fields are extracted and added to each act
    - Requires BOTH start and end points within radius to match
    - Activities without GPS coordinates are marked as "No GPS"
 
-3. **Filtered Statistics:** When `admin_db` is passed to `get_athlete_stats()` or `get_athlete_summary()`, the returned statistics only count activities that match the location filter. This ensures dashboard stats reflect only the filtered activities shown.
+3. **Filtered Statistics:** When `admin_db` is passed to `get_athlete_stats()` or `get_athlete_summary()`, the returned statistics are filtered by:
+   - **Time**: Only includes activities from the last N days (configured in `activity_filter_days` setting)
+   - **Location**: Only includes activities matching the GPS location filter
 
-4. **Dashboard Display:** Dashboard shows 3 statistics (total activities, total distance, total moving time) - all filtered by location when `admin_db` is provided. Matching activities are highlighted with green background and show detailed distance information in the GPS Info column.
+   This two-level filtering ensures dashboard stats reflect only relevant, recent activities.
 
-5. **Sync Strategy:** First-time login syncs from 2025-01-01. Subsequent syncs use latest activity date minus 1 day to catch updates.
+4. **Dashboard Display:** Dashboard shows 3 statistics (total activities, total distance, total moving time) - all filtered by time period and location when `admin_db` is provided. The time period is shown in the stats title (e.g., "Activities With PRC (Last 90 days)"). Matching activities are highlighted with green background and show detailed distance information in the GPS Info column.
 
-6. **Configuration Validation:** All required environment variables (DATABASE_URL, STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET) are validated at application startup via the `Config` class. The app will fail immediately with a helpful error message if any required configuration is missing - no fallback or runtime errors.
+5. **Conditional Features:** The dashboard includes conditional UI elements based on activity count:
+   - Athletes with more than 5 activities see a "Visualize Discounts" button linking to `/discounts`
+   - The discounts page is a placeholder for future rewards/discount features
 
-7. **Templates & Static Files:**
+6. **Sync Strategy:** First-time login syncs from 2025-01-01. Subsequent syncs use latest activity date minus 1 day to catch updates.
+
+7. **Configuration Validation:** All required environment variables (DATABASE_URL, STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET) are validated at application startup via the `Config` class. The app will fail immediately with a helpful error message if any required configuration is missing - no fallback or runtime errors.
+
+8. **Activity Time Filter:** The time period for filtering activities in statistics is configurable via the admin settings (`/admin/settings`). Default is 90 days, but can be set to any value between 1-365 days. This allows flexibility for different use cases (weekly, monthly, quarterly, or annual tracking).
+
+9. **Templates & Static Files:**
    - Jinja2 templates in `templates/` directory
    - All styles consolidated in `static/css/style.css`
    - Dashboard template expects `summary.stats` with: `total_activities`, `total_distance`, `total_moving_time`
+   - Dashboard template expects `activity_filter_days` to display the time period in the stats title
    - Templates use external CSS (no inline `<style>` blocks)
 
 ## Separation of Concerns
@@ -428,3 +455,33 @@ When adding new features:
 - Route handlers → `src/routes/`
 - Visual styling → `static/css/style.css`
 - HTML structure → `templates/`
+
+## Recent Enhancements
+
+### Configurable Activity Time Filter (Latest)
+The application now allows admins to configure the time period for activity filtering:
+- **Setting**: `activity_filter_days` in the `settings` table (default: 90 days)
+- **Management**: `/admin/settings` page with form to update the value (1-365 days range)
+- **Implementation**: `StravaDataDatabase.get_athlete_stats()` reads this setting via `admin_db.get_activity_filter_days()`
+- **Display**: Dashboard title shows the current time period (e.g., "Activities With PRC (Last 90 days)")
+- **Purpose**: Allows flexible time-based filtering for different use cases (weekly reviews, monthly reports, seasonal tracking)
+
+### Discounts/Rewards Feature (Placeholder)
+Added conditional access to a future discounts/rewards feature with configurable threshold:
+- **Setting**: `discount_threshold_activities` in the `settings` table (default: 5 activities)
+- **Management**: `/admin/settings` page with form to update the threshold (1-100 range)
+- **Button Behavior**:
+  - Always visible on dashboard
+  - Enabled (clickable) when athlete has >= threshold activities
+  - Disabled (grayed out) with unlock message when below threshold
+- **Route**: `/discounts` - authenticated route with placeholder content
+- **Template**: `discount.html` - shows future benefits, athlete stats, and "coming soon" messaging
+- **Purpose**: Foundation for future gamification/rewards features to encourage engagement
+- **Implementation**: Dashboard template receives `discount_threshold` variable and compares it to `total_activities`
+
+### Key Implementation Details
+1. **Two-Level Filtering**: Statistics are now filtered by both time period (configurable days) AND GPS location (proximity-based)
+2. **Dynamic Dashboard**: Time period and discount threshold are passed from route to template and displayed dynamically
+3. **Admin Control**: All filtering parameters (location, radius, time period, discount threshold) are now configurable via admin interface
+4. **Backward Compatibility**: If `admin_db` is not provided to stats methods, defaults to 90 days for time filtering
+5. **Gamification**: Discount button always visible but disabled state motivates athletes to reach the threshold

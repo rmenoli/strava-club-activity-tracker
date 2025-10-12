@@ -45,7 +45,22 @@
                 </div>
             </div>
             {% endif %}
-            
+
+            <div class="discount-button-container" style="margin: 20px 0; text-align: center;">
+                {% if summary and summary.stats and summary.stats.total_activities >= discount_threshold %}
+                <a href="/discounts" class="btn" style="display: inline-block; padding: 12px 24px; background-color: #fc4c02; color: white; text-decoration: none; border-radius: 8px; font-weight: 600;">
+                    📊 Visualize Discounts
+                </a>
+                {% else %}
+                <span class="btn" style="display: inline-block; padding: 12px 24px; background-color: #666666; color: #999999; border-radius: 8px; font-weight: 600; cursor: not-allowed; opacity: 0.6;">
+                    📊 Visualize Discounts
+                </span>
+                <div style="color: #aaaaaa; font-size: 12px; margin-top: 8px; font-style: italic;">
+                    Requires {{ discount_threshold }}+ activities to unlock
+                </div>
+                {% endif %}
+            </div>
+
             <div class="navigation">
                 <div class="nav-links dashboard-nav">
                     <a href="/sync" class="nav-link secondary">🔄 Sync Activities</a>
