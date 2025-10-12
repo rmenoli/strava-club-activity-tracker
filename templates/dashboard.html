@@ -15,7 +15,7 @@
             
             {% if summary and summary.stats %}
             <div class="stats-container">
-                <h3 class="stats-title">📊 Activity Statistics</h3>
+                <h3 class="stats-title">Activity With PRC</h3>
                 
                 <div class="stat-item">
                     <div class="stat-label">Total Activities</div>
@@ -59,7 +59,10 @@
         <div class="right-section">
             <div class="right-section-content">
                 <div class="activities-header">
-                    <h2 class="activities-title">🏃 Recent Activities</h2>
+                    <h2 class="activities-title">Recent Running Activities</h2>
+                    <small class="data-attribution">
+                        Activity data obtained through the Strava API and may include data got from Garmin.<br>
+                    </small>
                     <div class="activities-count">{{ activities|length }} activities</div>
                 </div>
 
@@ -68,15 +71,11 @@
                 <span class="legend-title">Legend:</span>
                 <div class="legend-item">
                     <div class="legend-box match"></div>
-                    <span>Matches Location Filter</span>
+                    <span>Activity with PRC</span>
                 </div>
                 <div class="legend-item">
                     <div class="legend-box no-match"></div>
-                    <span>Does Not Match</span>
-                </div>
-                <div class="legend-item">
-                    <span class="filter-badge date-specific">📅 Date Filter</span>
-                    <span>= Date-specific filter applied</span>
+                    <span>Run without PRC </span>
                 </div>
             </div>
             {% endif %}

@@ -1,10 +1,11 @@
 import json
 import math
-import psycopg2
 from contextlib import contextmanager
-from datetime import datetime
-from psycopg2.extras import RealDictCursor
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional
+
+import psycopg2
+from psycopg2.extras import RealDictCursor
 
 from src.databases.admin_database import AdminDatabase
 
@@ -156,7 +157,8 @@ class StravaDataDatabase:
         with self.get_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cursor:
                 cursor.execute(
-                    "SELECT last_sync FROM athletes WHERE athlete_id = %s", (athlete_id,)
+                    "SELECT last_sync FROM athletes WHERE athlete_id = %s",
+                    (athlete_id,),
                 )
                 result = cursor.fetchone()
                 if result and result["last_sync"]:
@@ -230,10 +232,25 @@ class StravaDataDatabase:
                     (athlete_id,),
                 )
                 result = cursor.fetchone()
-                if result:
-                    return datetime.fromisoformat(
-                        result["start_date"].replace("Z", "+00:00")
-                    )
+                if result and result["start_date"]:
+                    try:
+                        # Parse the date string (handles both 'Z' and '+00:00' formats)
+                        date_str = result["start_date"]
+                        if date_str.endswith("Z"):
+                            date_str = date_str[:-1] + "+00:00"
+
+                        activity_date = datetime.fromisoformat(date_str)
+
+                        # Remove timezone info for consistency
+                        if activity_date.tzinfo is not None:
+                            activity_date = activity_date.replace(tzinfo=None)
+
+                        return activity_date
+                    except (ValueError, TypeError) as e:
+                        print(
+                            f"Warning: Could not parse latest activity date '{result['start_date']}': {e}"
+                        )
+                        return None
                 return None
 
     def get_all_athletes(self) -> List[Dict]:
@@ -265,30 +282,25 @@ class StravaDataDatabase:
 
         If admin_db is provided, only counts activities that match location filters.
         """
-        if not admin_db:
-            # No filtering - use simple SQL query
-            with self.get_connection() as conn:
-                with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-                    cursor.execute(
-                        """
-                        SELECT
-                            COUNT(*) as total_activities,
-                            SUM(distance) as total_distance,
-                            SUM(moving_time) as total_moving_time
-                        FROM activities
-                        WHERE athlete_id = %s
-                    """,
-                        (athlete_id,),
-                    )
-                    result = cursor.fetchone()
-                    return dict(result) if result else {}
 
         # With location filtering - get all activities and filter in Python
         activities = self.get_activities_filtered(athlete_id, admin_db)
 
+        # Filter to only activities in the last 3 months
+        three_months_ago = datetime.now() - timedelta(days=90)
+        filtered_activities = []
+
+        for a in activities:
+            date_str = a.get("start_date")
+            activity_date = datetime.fromisoformat(date_str)
+            if activity_date.tzinfo:
+                activity_date = activity_date.replace(tzinfo=None)
+            if activity_date >= three_months_ago:
+                filtered_activities.append(a)
+
         # Filter to only matching activities
         matching_activities = [
-            a for a in activities if a.get("matches_location_filter", False)
+            a for a in filtered_activities if a.get("matches_location_filter", True)
         ]
 
         # Calculate stats
@@ -336,7 +348,8 @@ class StravaDataDatabase:
                 for activity in activities:
                     # Check if activity already exists
                     cursor.execute(
-                        "SELECT 1 FROM activities WHERE activity_id = %s", (activity["id"],)
+                        "SELECT 1 FROM activities WHERE activity_id = %s",
+                        (activity["id"],),
                     )
                     if cursor.fetchone():
                         continue  # Skip existing activities
@@ -483,7 +496,6 @@ class StravaDataDatabase:
         athlete_id: str,
         admin_db: AdminDatabase = None,
         limit: int = None,
-        activity_type: str = None,
     ) -> List[Dict]:
         """
         Get activities with automatically extracted relevant fields from raw_data.
@@ -500,13 +512,9 @@ class StravaDataDatabase:
                            average_speed, max_speed, raw_data
                     FROM activities
                     WHERE athlete_id = %s
+                    AND type = 'Run'      
                 """
                 params = [athlete_id]
-
-                # Add activity type filter if specified
-                if activity_type:
-                    query += " AND type = %s"
-                    params.append(activity_type)
 
                 query += " ORDER BY start_date DESC"
 
