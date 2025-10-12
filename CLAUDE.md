@@ -40,6 +40,34 @@ uv add <package-name>
 source .venv/bin/activate
 ```
 
+### Testing
+```bash
+# Run all tests
+pytest
+
+# Run specific test file
+pytest tests/test_activities_filtered.py
+
+# Run specific test class
+pytest tests/test_activities_filtered.py::TestGetActivitiesFiltered
+
+# Run specific test
+pytest tests/test_activities_filtered.py::TestGetActivitiesFiltered::test_location_filtering_with_default_settings_match
+
+# Run with verbose output
+pytest -v
+
+# Run with coverage report
+pytest --cov=src --cov-report=html
+```
+
+**Test Infrastructure:**
+- Tests use a separate PostgreSQL database (`strava_tracker_test`) to avoid affecting development data
+- Test database is automatically created on first test run
+- `tests/conftest.py` provides shared fixtures and test configuration
+- All test environment variables are loaded from `tests/.env.test` at module level with `override=True`
+- Each test gets a clean database state via fixture cleanup
+
 ### Environment Setup
 Copy `.env-example` to `.env` and configure:
 - `STRAVA_CLIENT_ID` and `STRAVA_CLIENT_SECRET` - Strava OAuth credentials (required)
@@ -109,7 +137,7 @@ The database layer uses two specialized classes in `src/databases/`:
 - Handles athletes, activities, GPS-based location filtering, and statistics
 - Tables: `athletes`, `activities`
 - Key methods:
-  - `get_activities_filtered(athlete_id, admin_db, limit, activity_type)` - extracts relevant fields from raw JSON, filters by activity type, and applies GPS location matching
+  - `get_activities_filtered(athlete_id, admin_db, limit)` - extracts relevant fields from raw JSON and applies GPS location matching
   - `get_athlete_stats(athlete_id, admin_db)` - calculates statistics; if `admin_db` provided, only counts activities matching location filters
   - `get_athlete_summary(athlete_id, admin_db)` - returns stats with sync status; if `admin_db` provided, stats are filtered by location
 
@@ -126,7 +154,7 @@ admin_db = AdminDatabase(config.DATABASE_URL)
 data_db = StravaDataDatabase(config.DATABASE_URL)
 
 # Get filtered activities with location matching
-activities = data_db.get_activities_filtered(athlete_id, admin_db, limit=100, activity_type="Run")
+activities = data_db.get_activities_filtered(athlete_id, admin_db, limit=100)
 
 # Each activity includes:
 # - matches_location_filter: Boolean indicating if activity is within the filter radius
@@ -211,7 +239,7 @@ This two-level filtering ensures dashboard stats reflect only relevant, recent a
 - Date-specific filters: Yellow "Date Filter" badge
 - GPS Info column: Shows distances from start/end to target
 
-**Current Activity Type Filter:** Only "Run" activities (hardcoded in `main_routes.py:36`)
+**Current Activity Type Filter:** Only "Run" activities (hardcoded in SQL query at `strava_data_database.py:516`)
 
 ## Key Patterns
 
@@ -255,7 +283,7 @@ def setup_main_routes(app, data_db, admin_db, sync_service, config):
     @app.get("/")
     async def index(request: Request):
         # Has access to data_db, admin_db, sync_service, config via closure
-        activities = data_db.get_activities_filtered(athlete_id, admin_db, limit=100, activity_type="Run")
+        activities = data_db.get_activities_filtered(athlete_id, admin_db, limit=100)
         summary = data_db.get_athlete_summary(athlete_id, admin_db)
 
     @app.get("/login")
@@ -398,7 +426,7 @@ In `get_activities_filtered()`, these fields are extracted and added to each act
 
 ## Important Implementation Details
 
-1. **Activity Type Filtering:** Currently hardcoded to "Run" in `main_routes.py:36`. Change the `activity_type` parameter to filter different activity types or remove it to show all.
+1. **Activity Type Filtering:** Currently hardcoded to "Run" in the SQL query at `strava_data_database.py:516`. To show different activity types, modify the WHERE clause in `get_activities_filtered()` method (e.g., change `AND type = 'Run'` to `AND type = 'Ride'` or remove the type filter entirely).
 
 2. **GPS Location Filtering:** The `get_activities_filtered()` method performs GPS filtering inline:
    - Extracts `start_latlng` and `end_latlng` from `raw_data` JSON
@@ -419,7 +447,7 @@ In `get_activities_filtered()`, these fields are extracted and added to each act
    - Athletes with more than 5 activities see a "Visualize Discounts" button linking to `/discounts`
    - The discounts page is a placeholder for future rewards/discount features
 
-6. **Sync Strategy:** First-time login syncs from 2025-01-01. Subsequent syncs use latest activity date minus 1 day to catch updates.
+6. **Sync Strategy:** First-time login syncs from 180 days ago (6 months). Subsequent syncs use latest activity date minus 1 day to catch updates.
 
 7. **Configuration Validation:** All required environment variables (DATABASE_URL, STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET) are validated at application startup via the `Config` class. The app will fail immediately with a helpful error message if any required configuration is missing - no fallback or runtime errors.
 
@@ -485,3 +513,65 @@ Added conditional access to a future discounts/rewards feature with configurable
 3. **Admin Control**: All filtering parameters (location, radius, time period, discount threshold) are now configurable via admin interface
 4. **Backward Compatibility**: If `admin_db` is not provided to stats methods, defaults to 90 days for time filtering
 5. **Gamification**: Discount button always visible but disabled state motivates athletes to reach the threshold
+
+## Testing Strategy
+
+### Test Organization
+
+**Integration Tests** (`tests/` directory):
+- `test_activities_filtered.py` - Comprehensive tests for `get_activities_filtered()` method
+  - Tests basic retrieval without location filtering
+  - Tests GPS location matching (both matching and non-matching cases)
+  - Tests date-specific location overrides
+  - Tests edge cases (no GPS data, empty results, ordering, limits)
+  - 9 test cases covering all major scenarios
+
+**Test Fixtures** (`tests/conftest.py`):
+- `test_config` - Test configuration that loads from `tests/.env.test`
+- `setup_test_database` - Session-scoped fixture that creates/drops test database
+- `admin_db` - Function-scoped AdminDatabase with automatic cleanup
+- `data_db` - Function-scoped StravaDataDatabase with automatic cleanup
+- `sync_service` - ActivitySyncService instance for testing
+- `mock_strava_client` - Mock Strava API client to avoid real API calls
+- `sample_activity`, `sample_activity_far`, `sample_activity_no_gps` - Sample activity data
+- `create_test_athlete`, `create_test_activity`, `create_date_filter` - Factory fixtures
+
+**Important Test Configuration Details:**
+1. Environment variables are loaded from `tests/.env.test` with `override=True` at module level (before Config is instantiated)
+2. The `Config` class automatically picks up test environment variables without manual overrides
+3. Each test gets a clean database state via fixture teardown
+4. Settings are reset to defaults after each test (activity_filter_days=90, discount_threshold_activities=5, etc.)
+5. The test database persists between test runs for performance (manually reset with `docker-compose down -v`)
+6. **Critical:** Activities must be stored with valid JSON in `raw_data` field using `json.dumps()`, not `str()`
+
+**Writing New Tests:**
+```python
+def test_my_feature(data_db, admin_db, create_test_athlete, create_test_activity):
+    """Test description."""
+    # Setup
+    athlete_id = create_test_athlete()
+    activity = {"id": 1001, "name": "Test Run", "type": "Run", ...}
+    create_test_activity(athlete_id, activity)
+
+    # Execute
+    result = data_db.get_activities_filtered(athlete_id, admin_db)
+
+    # Verify
+    assert len(result) == 1
+    assert result[0]["name"] == "Test Run"
+```
+
+**Key Testing Patterns:**
+- Use factory fixtures (`create_test_*`) to create test data
+- Pass `admin_db` to enable GPS location filtering in tests
+- Sample activities use Prague coordinates (50.097416, 14.462274) for matching tests
+- Sample activities use London coordinates (51.5074, -0.1278) for non-matching tests
+- Activities must have `type='Run'` to be returned by `get_activities_filtered()`
+
+**Test Coverage:**
+- Database operations (CRUD)
+- GPS distance calculations (Haversine formula)
+- Location filtering logic (both start AND end points must be within radius)
+- Date-specific location overrides
+- Activity ordering and pagination
+- Edge cases (missing GPS, empty results, etc.)
