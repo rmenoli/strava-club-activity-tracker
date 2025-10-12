@@ -39,6 +39,9 @@ def setup_main_routes(
                     # Get athlete summary stats (filtered by location)
                     summary = data_db.get_athlete_summary(athlete_id, admin_db)
 
+                    # Get the activity filter days setting
+                    activity_filter_days = admin_db.get_activity_filter_days()
+
                     return templates.TemplateResponse(
                         "dashboard.html",
                         {
@@ -46,6 +49,7 @@ def setup_main_routes(
                             "athlete_id": athlete_id,
                             "activities": activities,
                             "summary": summary,
+                            "activity_filter_days": activity_filter_days,
                         },
                     )
                 else:

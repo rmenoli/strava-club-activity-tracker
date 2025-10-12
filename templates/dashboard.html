@@ -15,8 +15,8 @@
             
             {% if summary and summary.stats %}
             <div class="stats-container">
-                <h3 class="stats-title">Activity With PRC</h3>
-                
+                <h3 class="stats-title">Activities With PRC <br> last {{ activity_filter_days }} days</h3>
+
                 <div class="stat-item">
                     <div class="stat-label">Total Activities</div>
                     <div class="stat-value">{{ summary.stats.total_activities or 0 }}</div>

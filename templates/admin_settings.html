@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Settings - Strava Club Activity Tracker</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>⚙️ Settings</h1>
+
+        <div class="nav-links">
+            <a href="/admin">🏠 Admin Dashboard</a>
+            <a href="/admin/date-filters">📅 Date Filters</a>
+            <a href="/">🏃 Main App</a>
+            <a href="#" onclick="window.location.reload()">🔄 Refresh</a>
+        </div>
+
+        <div class="section">
+            <h2>📊 Activity Display Settings</h2>
+
+            <div class="default-info">
+                <h4>📅 Current Activity Filter Period:</h4>
+                <p><strong>{{ activity_filter_days }} days</strong></p>
+                <p><em>Activities from the last {{ activity_filter_days }} days will be included in statistics and displayed on the dashboard.</em></p>
+            </div>
+
+            <form method="post" action="/admin/settings/update">
+                <div class="form-group">
+                    <label for="activity_filter_days">Activity Filter Period (days):</label>
+                    <input type="number" id="activity_filter_days" name="activity_filter_days"
+                           value="{{ activity_filter_days }}"
+                           min="1" max="365" required>
+                    <div class="help-text">Number of days of activity history to include (1-365 days)</div>
+                </div>
+
+                <button type="submit" class="btn">💾 Update Settings</button>
+            </form>
+        </div>
+
+        <div class="section">
+            <h2>💡 How Activity Filtering Works</h2>
+            <ul>
+                <li><strong>Time-Based Filter:</strong> Only activities from the last N days are included in dashboard statistics</li>
+                <li><strong>Location Filter:</strong> Activities are also filtered by GPS location (start and end points must be within the configured radius)</li>
+                <li><strong>Combined Filtering:</strong> Both time and location filters must pass for an activity to be counted</li>
+                <li><strong>Dashboard Impact:</strong> The "Total Activities", "Total Distance", and "Total Moving Time" stats reflect only filtered activities</li>
+            </ul>
+
+            <h4>📝 Common Settings:</h4>
+            <ul>
+                <li><strong>7 days:</strong> Weekly activity summary</li>
+                <li><strong>30 days:</strong> Monthly activity review</li>
+                <li><strong>90 days:</strong> Quarterly tracking (default)</li>
+                <li><strong>180 days:</strong> Semi-annual review</li>
+                <li><strong>365 days:</strong> Full year tracking</li>
+            </ul>
+
+            <h4>⚠️ Note:</h4>
+            <p>This setting affects what activities are displayed on the dashboard and included in statistics. It does not affect which activities are synced from Strava or stored in the database - all activities are always synced and stored.</p>
+        </div>
+    </div>
+</body>
+</html>

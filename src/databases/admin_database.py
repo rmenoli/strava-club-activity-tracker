@@ -31,7 +31,8 @@ class AdminDatabase:
                     VALUES
                         ('target_latitude', '50.097416', 'Default target location latitude for activity filtering'),
                         ('target_longitude', '14.462274', 'Default target location longitude for activity filtering'),
-                        ('filter_radius_km', '1.0', 'Default radius in kilometers for location filtering')
+                        ('filter_radius_km', '1.0', 'Default radius in kilometers for location filtering'),
+                        ('activity_filter_days', '90', 'Number of days of activity history to include in statistics')
                     ON CONFLICT (key) DO NOTHING
                 """)
 
@@ -88,6 +89,26 @@ class AdminDatabase:
             ),
             "filter_radius_km": float(self.get_setting("filter_radius_km", "1.0")),
         }
+
+    def get_activity_filter_days(self) -> int:
+        """Get the number of days of activity history to include in statistics."""
+        return int(self.get_setting("activity_filter_days", "90"))
+
+    def update_activity_filter_days(self, days: int) -> None:
+        """Update the number of days of activity history to include in statistics."""
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO settings (key, value, updated_at)
+                    VALUES ('activity_filter_days', %s, CURRENT_TIMESTAMP)
+                    ON CONFLICT (key) DO UPDATE SET
+                        value = EXCLUDED.value,
+                        updated_at = CURRENT_TIMESTAMP
+                """,
+                    (str(days),),
+                )
+                conn.commit()
 
     # ===== DATE-BASED LOCATION FILTERS =====
 

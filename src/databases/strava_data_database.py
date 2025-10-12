@@ -286,8 +286,9 @@ class StravaDataDatabase:
         # With location filtering - get all activities and filter in Python
         activities = self.get_activities_filtered(athlete_id, admin_db)
 
-        # Filter to only activities in the last 3 months
-        three_months_ago = datetime.now() - timedelta(days=90)
+        # Filter to only activities within the configured time period
+        filter_days = admin_db.get_activity_filter_days() if admin_db else 90
+        cutoff_date = datetime.now() - timedelta(days=filter_days)
         filtered_activities = []
 
         for a in activities:
@@ -295,7 +296,7 @@ class StravaDataDatabase:
             activity_date = datetime.fromisoformat(date_str)
             if activity_date.tzinfo:
                 activity_date = activity_date.replace(tzinfo=None)
-            if activity_date >= three_months_ago:
+            if activity_date >= cutoff_date:
                 filtered_activities.append(a)
 
         # Filter to only matching activities

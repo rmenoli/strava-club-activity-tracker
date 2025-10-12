@@ -128,3 +128,43 @@ def setup_admin_routes(
     async def get_date_filters():
         """API endpoint to get all date-based location filters."""
         return admin_db.get_all_date_location_filters()
+
+    @app.get("/admin/settings")
+    async def admin_settings(request: Request):
+        """Admin page for managing general settings."""
+        activity_filter_days = admin_db.get_activity_filter_days()
+
+        return templates.TemplateResponse(
+            "admin_settings.html",
+            {
+                "request": request,
+                "activity_filter_days": activity_filter_days,
+            },
+        )
+
+    @app.post("/admin/settings/update")
+    async def update_settings(request: Request):
+        """Update general settings."""
+        form_data = await request.form()
+
+        try:
+            days = int(form_data.get("activity_filter_days", 90))
+
+            # Validate input
+            if not (1 <= days <= 365):
+                raise ValueError("Activity filter days must be between 1 and 365")
+
+            admin_db.update_activity_filter_days(days)
+
+            return HTMLResponse(f"""
+                <h3>✅ Settings updated successfully!</h3>
+                <p>Activity filter period: {days} days</p>
+                <p><a href='/admin/settings'>Back to Settings</a> | <a href='/admin'>Admin Dashboard</a></p>
+            """)
+
+        except (ValueError, TypeError) as e:
+            return HTMLResponse(f"""
+                <h3>❌ Error updating settings</h3>
+                <p>Error: {str(e)}</p>
+                <p><a href='/admin/settings'>Back to Settings</a></p>
+            """)
