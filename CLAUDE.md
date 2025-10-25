@@ -182,7 +182,7 @@ Routes are organized by functionality in `src/routes/`:
 - `/auth/strava/callback` - OAuth callback, syncs activities on first login
 - `/sync` - Manual sync trigger
 - `/download` - Export activities as CSV
-- `/discounts` - Rewards page for active athletes (5+ activities)
+- `/discounts` - Rewards page for athletes meeting the configurable activity threshold
 - `/logout` - Clear session and redirect to home
 - Session-based authentication using `request.session["athlete_id"]`
 
@@ -462,8 +462,8 @@ In `get_activities_filtered()`, these fields are extracted and added to each act
 4. **Dashboard Display:** Dashboard shows 3 statistics (total activities, total distance, total moving time) - all filtered by time period and location when `admin_db` is provided. The time period is shown in the stats title (e.g., "Activities With PRC (Last 90 days)"). Matching activities are highlighted with green background and show detailed distance information in the GPS Info column.
 
 5. **Conditional Features:** The dashboard includes conditional UI elements based on activity count:
-   - Athletes with more than 5 activities see a "Visualize Discounts" button linking to `/discounts`
-   - The discounts page is a placeholder for future rewards/discount features
+   - Athletes with activity count >= configurable threshold (default: 5) see a "Visualize Discounts" button linking to `/discounts`
+   - The discounts page displays active discounts configured by admins via `/admin/discounts`
 
 6. **Sync Strategy:** First-time login syncs from 180 days ago (6 months). Subsequent syncs use latest activity date minus 1 day to catch updates.
 
@@ -522,8 +522,6 @@ Full-featured discount/rewards system with admin management and user display:
   - View all discounts with status indicators
 - **User Interface**: `/discounts` page displays active discounts in card-based grid layout
   - Each card shows title, description, and discount code
-  - One-click copy functionality for discount codes
-  - Athlete stats summary at top of page
   - Empty state message when no discounts available
 - **Access Control**: Configurable threshold (`discount_threshold_activities` in settings table)
   - Dashboard button enabled when athlete has >= threshold activities
@@ -532,8 +530,7 @@ Full-featured discount/rewards system with admin management and user display:
   - AdminDatabase methods: `get_all_discounts()`, `get_active_discounts()`, `add_discount()`, `delete_discount()`, `toggle_discount_status()`
   - User route fetches only active discounts via `admin_db.get_active_discounts()`
   - Responsive card layout with hover effects
-  - Copy button with visual feedback (changes to "Copied!" on click)
-  - Discount codes displayed in monospace font with orange accent
+  - Discount codes displayed in monospace font via `<code>` element
 
 ### Key Implementation Details
 1. **Two-Level Filtering**: Statistics are now filtered by both time period (configurable days) AND GPS location (proximity-based)
