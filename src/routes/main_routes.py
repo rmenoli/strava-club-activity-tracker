@@ -123,12 +123,16 @@ def setup_main_routes(
         # Get athlete summary to show stats on discounts page
         summary = data_db.get_athlete_summary(athlete_id, admin_db)
 
+        # Get active discounts
+        active_discounts = admin_db.get_active_discounts()
+
         return templates.TemplateResponse(
             "discount.html",
             {
                 "request": request,
                 "athlete_id": athlete_id,
                 "summary": summary,
+                "discounts": active_discounts,
             },
         )
 

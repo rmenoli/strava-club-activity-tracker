@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Discount Management - Strava Club Activity Tracker</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>🎁 Discount Management</h1>
+
+        <div class="nav-links">
+            <a href="/admin">🏠 Admin Dashboard</a>
+            <a href="/admin/settings">⚙️ Global Settings</a>
+            <a href="/admin/date-filters">📅 Date Filters</a>
+            <a href="/">🏃 Main App</a>
+            <a href="#" onclick="window.location.reload()">🔄 Refresh</a>
+        </div>
+
+        <div class="section">
+            <h2>➕ Add New Discount</h2>
+            <form method="post" action="/admin/discounts/add">
+                <div class="form-group">
+                    <label for="title">Discount Title:</label>
+                    <input type="text" id="title" name="title" placeholder="e.g., 10% Off Running Gear" required>
+                    <div class="help-text">Short, descriptive title for the discount</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="description">Description:</label>
+                    <textarea id="description" name="description" rows="3" placeholder="e.g., Get 10% off all running gear at our partner store. Valid for all club members."></textarea>
+                    <div class="help-text">Detailed description of the discount and how to use it</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="code">Discount Code:</label>
+                    <input type="text" id="code" name="code" placeholder="e.g., CLUB10" required>
+                    <div class="help-text">The code athletes will use to redeem the discount</div>
+                </div>
+
+                <button type="submit" class="btn">💾 Add Discount</button>
+            </form>
+        </div>
+
+        <div class="section">
+            <h2>📋 Existing Discounts</h2>
+
+            {% if discounts %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Title</th>
+                        <th>Description</th>
+                        <th>Code</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for discount in discounts %}
+                    <tr>
+                        <td><strong>{{ discount.title }}</strong></td>
+                        <td style="max-width: 300px;">{{ discount.description or '-' }}</td>
+                        <td><code class="discount-code">{{ discount.code }}</code></td>
+                        <td>
+                            {% if discount.is_active %}
+                                <span class="status-badge status-active">✓ Active</span>
+                            {% else %}
+                                <span class="status-badge status-inactive">✗ Inactive</span>
+                            {% endif %}
+                        </td>
+                        <td style="font-size: 11px; color: #aaaaaa;">
+                            {% if discount.created_at %}
+                                {{ discount.created_at.strftime('%Y-%m-%d') if discount.created_at is not string else discount.created_at[:10] }}
+                            {% else %}
+                                Unknown
+                            {% endif %}
+                        </td>
+                        <td>
+                            <form method="post" action="/admin/discounts/toggle/{{ discount.id }}"
+                                  style="display: inline; margin-right: 5px;">
+                                <button type="submit" class="btn btn-small">
+                                    {% if discount.is_active %}
+                                        🔒 Disable
+                                    {% else %}
+                                        ✅ Enable
+                                    {% endif %}
+                                </button>
+                            </form>
+                            <form method="post" action="/admin/discounts/delete/{{ discount.id }}"
+                                  style="display: inline;"
+                                  onsubmit="return confirm('Are you sure you want to delete discount: {{ discount.title }}?')">
+                                <button type="submit" class="btn btn-danger btn-small">🗑️ Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="no-filters">
+                <h3>No discounts configured</h3>
+                <p>Athletes won't see any discounts on their rewards page yet.</p>
+                <p>Use the form above to add your first discount.</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="section">
+            <h2>💡 How Discount Management Works</h2>
+            <ul>
+                <li><strong>Active Discounts:</strong> Only active discounts are visible to athletes on their rewards page</li>
+                <li><strong>Threshold Access:</strong> Athletes must meet the activity threshold (configured in Global Settings) to access the rewards page</li>
+                <li><strong>Toggle Status:</strong> You can temporarily disable discounts without deleting them</li>
+                <li><strong>Discount Codes:</strong> Athletes can copy the code directly from their rewards page</li>
+            </ul>
+
+            <h4>📝 Best Practices:</h4>
+            <ul>
+                <li><strong>Clear Titles:</strong> Use descriptive titles that explain the benefit at a glance</li>
+                <li><strong>Detailed Descriptions:</strong> Include redemption instructions and any restrictions</li>
+                <li><strong>Simple Codes:</strong> Use memorable codes that are easy to type or copy</li>
+                <li><strong>Keep Updated:</strong> Disable or delete expired discounts to avoid confusion</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>

@@ -58,6 +58,19 @@ class AdminDatabase:
                     ON date_location_filters (filter_date)
                 """)
 
+                # Discounts table
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS discounts (
+                        id SERIAL PRIMARY KEY,
+                        title TEXT NOT NULL,
+                        description TEXT,
+                        code TEXT NOT NULL,
+                        is_active BOOLEAN DEFAULT TRUE,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+
                 conn.commit()
 
     @contextmanager
@@ -218,3 +231,62 @@ class AdminDatabase:
             default_settings["source"] = "default"
             default_settings["filter_date"] = None
             return default_settings
+
+    # ===== DISCOUNT MANAGEMENT =====
+
+    def get_all_discounts(self, active_only: bool = False) -> List[Dict]:
+        """Get all discounts, optionally filtered by active status."""
+        with self.get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+                if active_only:
+                    cursor.execute("""
+                        SELECT id, title, description, code, is_active, created_at, updated_at
+                        FROM discounts
+                        WHERE is_active = TRUE
+                        ORDER BY created_at DESC
+                    """)
+                else:
+                    cursor.execute("""
+                        SELECT id, title, description, code, is_active, created_at, updated_at
+                        FROM discounts
+                        ORDER BY created_at DESC
+                    """)
+                return [dict(row) for row in cursor.fetchall()]
+
+    def get_active_discounts(self) -> List[Dict]:
+        """Get only active discounts for user display."""
+        return self.get_all_discounts(active_only=True)
+
+    def add_discount(self, title: str, description: str, code: str) -> None:
+        """Add a new discount."""
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO discounts (title, description, code, updated_at)
+                    VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
+                """,
+                    (title, description, code),
+                )
+                conn.commit()
+
+    def delete_discount(self, discount_id: int) -> None:
+        """Delete a discount."""
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("DELETE FROM discounts WHERE id = %s", (discount_id,))
+                conn.commit()
+
+    def toggle_discount_status(self, discount_id: int) -> None:
+        """Toggle the active status of a discount."""
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    UPDATE discounts
+                    SET is_active = NOT is_active, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                """,
+                    (discount_id,),
+                )
+                conn.commit()

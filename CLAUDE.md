@@ -124,14 +124,19 @@ client_id = config.STRAVA_CLIENT_ID
 The database layer uses two specialized classes in `src/databases/`:
 
 **AdminDatabase** (`src/databases/admin_database.py`)
-- Manages location configurations, date-specific location filters, and general settings
-- Tables: `settings`, `date_location_filters`
+- Manages location configurations, date-specific location filters, general settings, and discount rewards
+- Tables: `settings`, `date_location_filters`, `discounts`
 - Key methods:
   - `get_location_settings_for_activity(activity_start_date)` - returns location settings with date-specific overrides
   - `get_activity_filter_days()` - returns the configured number of days for activity history filtering
   - `update_activity_filter_days(days)` - updates the time period filter setting
   - `get_discount_threshold()` - returns the minimum activities required for discount access
   - `update_discount_threshold(threshold)` - updates the discount threshold setting
+  - `get_all_discounts(active_only)` - returns all discounts (optionally filtered by active status)
+  - `get_active_discounts()` - returns only active discounts for user display
+  - `add_discount(title, description, code)` - creates a new discount
+  - `delete_discount(discount_id)` - deletes a discount
+  - `toggle_discount_status(discount_id)` - toggles discount active/inactive status
 
 **StravaDataDatabase** (`src/databases/strava_data_database.py`)
 - Handles athletes, activities, GPS-based location filtering, and statistics
@@ -183,12 +188,16 @@ Routes are organized by functionality in `src/routes/`:
 
 **admin_routes.py**: Administrative interface
 - `/admin` - Multi-athlete dashboard with sync status
-- `/admin/settings` - General settings management (activity filter days)
+- `/admin/settings` - General settings management (activity filter days, discount threshold)
 - `/admin/settings/update` - Update general settings (POST)
 - `/admin/date-filters` - Manage date-specific location filters
 - `/admin/date-filters/add` - Add new date filter (POST)
 - `/admin/date-filters/delete/{date}` - Delete date filter (POST)
 - `/api/date-filters` - JSON API for date filters
+- `/admin/discounts` - Discount management interface
+- `/admin/discounts/add` - Create new discount (POST)
+- `/admin/discounts/delete/{discount_id}` - Delete discount (POST)
+- `/admin/discounts/toggle/{discount_id}` - Toggle discount active/inactive status (POST)
 
 Both route modules are registered in `main.py` via `setup_main_routes(app, data_db, admin_db, sync_service, config)` and `setup_admin_routes(app, data_db, admin_db)`.
 
@@ -307,14 +316,15 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 ```
 static/
   css/
-    style.css  # Consolidated styles for all templates (718 lines, 16KB)
+    style.css  # Consolidated styles for all templates (930+ lines)
 templates/
   index.html              # Welcome/login page
   dashboard.html          # User activity dashboard
   admin.html              # Admin multi-athlete view
-  admin_settings.html     # General settings (activity filter days)
+  admin_settings.html     # General settings (activity filter days, discount threshold)
   admin_date_filters.html # Date-specific location filter management
-  discount.html           # Rewards/discounts page (future feature placeholder)
+  admin_discounts.html    # Discount management interface (CRUD operations)
+  discount.html           # Rewards/discounts page with card-based display
 ```
 
 **CSS Architecture:**
@@ -377,6 +387,14 @@ templates/
 - `filter_date` (DATE, UNIQUE) - Date for location override (YYYY-MM-DD)
 - `target_latitude`, `target_longitude`, `radius_km` - Override coordinates
 - `description` (TEXT) - Optional description
+
+**discounts**
+- `id` (SERIAL, PK) - Auto-incrementing ID
+- `title` (TEXT, required) - Discount title/name
+- `description` (TEXT) - Detailed description of the discount
+- `code` (TEXT, required) - Discount code for redemption
+- `is_active` (BOOLEAN) - Whether discount is currently active (default: TRUE)
+- `created_at`, `updated_at` (TIMESTAMP) - Tracking timestamps
 
 ### Important Indexes
 - `idx_athlete_activities` on `activities(athlete_id, start_date)`
@@ -494,18 +512,28 @@ The application now allows admins to configure the time period for activity filt
 - **Display**: Dashboard title shows the current time period (e.g., "Activities With PRC (Last 90 days)")
 - **Purpose**: Allows flexible time-based filtering for different use cases (weekly reviews, monthly reports, seasonal tracking)
 
-### Discounts/Rewards Feature (Placeholder)
-Added conditional access to a future discounts/rewards feature with configurable threshold:
-- **Setting**: `discount_threshold_activities` in the `settings` table (default: 5 activities)
-- **Management**: `/admin/settings` page with form to update the threshold (1-100 range)
-- **Button Behavior**:
-  - Always visible on dashboard
-  - Enabled (clickable) when athlete has >= threshold activities
-  - Disabled (grayed out) with unlock message when below threshold
-- **Route**: `/discounts` - authenticated route with placeholder content
-- **Template**: `discount.html` - shows future benefits, athlete stats, and "coming soon" messaging
-- **Purpose**: Foundation for future gamification/rewards features to encourage engagement
-- **Implementation**: Dashboard template receives `discount_threshold` variable and compares it to `total_activities`
+### Discount Management System (Latest)
+Full-featured discount/rewards system with admin management and user display:
+- **Database**: `discounts` table with fields: id, title, description, code, is_active, created_at, updated_at
+- **Admin Interface**: `/admin/discounts` with full CRUD operations
+  - Add discounts with title, description, and redemption code
+  - Toggle active/inactive status without deletion
+  - Delete discounts permanently
+  - View all discounts with status indicators
+- **User Interface**: `/discounts` page displays active discounts in card-based grid layout
+  - Each card shows title, description, and discount code
+  - One-click copy functionality for discount codes
+  - Athlete stats summary at top of page
+  - Empty state message when no discounts available
+- **Access Control**: Configurable threshold (`discount_threshold_activities` in settings table)
+  - Dashboard button enabled when athlete has >= threshold activities
+  - Dashboard button disabled with unlock message when below threshold
+- **Implementation Details**:
+  - AdminDatabase methods: `get_all_discounts()`, `get_active_discounts()`, `add_discount()`, `delete_discount()`, `toggle_discount_status()`
+  - User route fetches only active discounts via `admin_db.get_active_discounts()`
+  - Responsive card layout with hover effects
+  - Copy button with visual feedback (changes to "Copied!" on click)
+  - Discount codes displayed in monospace font with orange accent
 
 ### Key Implementation Details
 1. **Two-Level Filtering**: Statistics are now filtered by both time period (configurable days) AND GPS location (proximity-based)

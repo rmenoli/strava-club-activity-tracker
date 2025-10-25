@@ -700,6 +700,176 @@ tr.location-match:hover {
     border: 1px solid #333333;
 }
 
+/* ==================== Discount List (Square Box Design) ==================== */
+.discount-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-top: 20px;
+}
+
+.discount-item {
+    background-color: #2a2a2a;
+    border: 2px solid #444444;
+    border-radius: 4px;
+    padding: 20px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 24px;
+    transition: border-color 0.2s ease;
+}
+
+.discount-item:hover {
+    border-color: #fc4c02 !important;
+}
+
+.discount-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.discount-header {
+    margin-bottom: 8px;
+}
+
+.discount-title {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #ffffff;
+    margin: 0;
+}
+
+.discount-desc {
+    color: #aaaaaa;
+    font-size: 14px;
+    line-height: 1.5;
+    margin: 0;
+}
+
+.discount-action {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.code-display {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+}
+
+.code-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #666666;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.code-text {
+    background-color: #1a1a1a;
+    border: 2px solid #555555;
+    color: #fc4c02;
+    padding: 10px 16px;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    user-select: text;
+    cursor: text;
+}
+
+/* Empty state */
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+}
+
+.empty-state h3 {
+    color: #aaaaaa;
+    margin-bottom: 10px;
+}
+
+.empty-state p {
+    color: #888888;
+}
+
+/* Responsive adjustments for discount list */
+@media (max-width: 768px) {
+    .discount-item {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 16px;
+    }
+
+    .discount-action {
+        width: 100%;
+    }
+
+    .code-display {
+        align-items: flex-start;
+        width: 100%;
+    }
+
+    .code-text {
+        width: 100%;
+        text-align: center;
+    }
+}
+
+/* Status badges for admin */
+.status-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.status-badge.status-active {
+    background-color: #1f3a2e;
+    color: #4ade80;
+    border: 1px solid #4ade80;
+}
+
+.status-badge.status-inactive {
+    background-color: #2a2a2a;
+    color: #999999;
+    border: 1px solid #333333;
+}
+
+/* Stat items for discount page */
+.stats-summary {
+    background-color: #2a2a2a;
+    padding: 15px 20px;
+    border-radius: 8px;
+    border: 1px solid #333333;
+}
+
+.stat-item {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.stat-label {
+    font-size: 12px;
+    color: #999999;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.stat-value {
+    font-size: 20px;
+    font-weight: 700;
+    color: #fc4c02;
+}
+
 /* ==================== Scrollbar Styling ==================== */
 ::-webkit-scrollbar {
     width: 10px;

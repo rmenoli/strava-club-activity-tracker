@@ -175,3 +175,80 @@ def setup_admin_routes(
                 <p>Error: {str(e)}</p>
                 <p><a href='/admin/settings'>Back to Settings</a></p>
             """)
+
+    @app.get("/admin/discounts")
+    async def admin_discounts(request: Request):
+        """Admin page for managing discounts."""
+        discounts = admin_db.get_all_discounts()
+
+        return templates.TemplateResponse(
+            "admin_discounts.html",
+            {
+                "request": request,
+                "discounts": discounts,
+            },
+        )
+
+    @app.post("/admin/discounts/add")
+    async def add_discount(request: Request):
+        """Add a new discount."""
+        form_data = await request.form()
+
+        try:
+            title = form_data.get("title", "").strip()
+            description = form_data.get("description", "").strip()
+            code = form_data.get("code", "").strip()
+
+            # Validate inputs
+            if not title:
+                raise ValueError("Title is required")
+            if not code:
+                raise ValueError("Code is required")
+
+            admin_db.add_discount(title, description, code)
+
+            return HTMLResponse(f"""
+                <h3>✅ Discount added successfully!</h3>
+                <p>Title: {title}</p>
+                <p>Code: {code}</p>
+                <p><a href='/admin/discounts'>Back to Discounts</a> | <a href='/admin'>Admin Dashboard</a></p>
+            """)
+
+        except (ValueError, TypeError) as e:
+            return HTMLResponse(f"""
+                <h3>❌ Error adding discount</h3>
+                <p>Error: {str(e)}</p>
+                <p><a href='/admin/discounts'>Back to Discounts</a></p>
+            """)
+
+    @app.post("/admin/discounts/delete/{discount_id}")
+    async def delete_discount(discount_id: int):
+        """Delete a discount."""
+        try:
+            admin_db.delete_discount(discount_id)
+            return HTMLResponse(f"""
+                <h3>✅ Discount deleted successfully!</h3>
+                <p><a href='/admin/discounts'>Back to Discounts</a></p>
+            """)
+        except Exception as e:
+            return HTMLResponse(f"""
+                <h3>❌ Error deleting discount</h3>
+                <p>Error: {str(e)}</p>
+                <p><a href='/admin/discounts'>Back to Discounts</a></p>
+            """)
+
+    @app.post("/admin/discounts/toggle/{discount_id}")
+    async def toggle_discount(discount_id: int):
+        """Toggle the active status of a discount."""
+        try:
+            admin_db.toggle_discount_status(discount_id)
+            return HTMLResponse(f"""
+                <h3>✅ Discount status toggled successfully!</h3>
+                <p><a href='/admin/discounts'>Back to Discounts</a></p>
+            """)
+        except Exception as e:
+            return HTMLResponse(f"""
+                <h3>❌ Error toggling discount status</h3>
+                <p>Error: {str(e)}</p>
+                <p><a href='/admin/discounts'>Back to Discounts</a></p>
+            """)
