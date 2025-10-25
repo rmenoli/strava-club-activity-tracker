@@ -37,3 +37,23 @@ strava_tokens.json
 .pytest_cache/
 htmlcov/
 .coverage
+.tox/
+tests/
+*.test
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Documentation
+README.md
+CLAUDE.md
+DEPLOYMENT.md
+docs/
+
+# CI/CD
+.github/
+
+# Logs
+*.log

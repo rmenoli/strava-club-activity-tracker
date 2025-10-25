@@ -61,6 +61,29 @@ pytest -v
 pytest --cov=src --cov-report=html
 ```
 
+### Deployment
+
+**Production Deployment (AWS EC2):**
+```bash
+# On EC2 instance after SSH
+bash scripts/setup_ec2.sh  # Automated setup: Docker, firewall, etc.
+
+# Configure environment
+cp .env.example.production .env
+vim .env  # Update with production values
+
+# Deploy with Docker Compose
+docker-compose -f docker-compose.prod.yml up -d
+
+# View logs
+docker-compose -f docker-compose.prod.yml logs -f
+
+# Restart services
+docker-compose -f docker-compose.prod.yml restart
+```
+
+See `DEPLOYMENT.md` for comprehensive deployment guide including AWS setup, security groups, Elastic IP allocation, and troubleshooting.
+
 **Test Infrastructure:**
 - Tests use a separate PostgreSQL database (`strava_tracker_test`) to avoid affecting development data
 - Test database is automatically created on first test run
