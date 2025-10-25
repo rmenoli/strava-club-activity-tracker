@@ -97,6 +97,7 @@ Copy `.env-example` to `.env` and configure:
 - `STRAVA_REDIRECT_URI` - OAuth callback URL (optional, default: `http://localhost:8000/auth/strava/callback`)
 - `SECRET_KEY` - Session encryption key (optional, default: `dev-secret`)
 - `DATABASE_URL` - PostgreSQL connection string (required)
+- `ADMIN_ATHLETE_IDS` - Comma-separated list of Strava athlete IDs with admin access (optional, default: empty)
 
 **Configuration Management:**
 All environment variables are loaded and validated at application startup using a centralized `Config` class (`src/config.py`). Missing required variables will cause the application to exit immediately with a clear error message listing what's missing. This eliminates runtime configuration errors and ensures all required settings are present before the application starts.
@@ -209,7 +210,7 @@ Routes are organized by functionality in `src/routes/`:
 - `/logout` - Clear session and redirect to home
 - Session-based authentication using `request.session["athlete_id"]`
 
-**admin_routes.py**: Administrative interface
+**admin_routes.py**: Administrative interface (requires admin authentication)
 - `/admin` - Multi-athlete dashboard with sync status
 - `/admin/settings` - General settings management (activity filter days, discount threshold)
 - `/admin/settings/update` - Update general settings (POST)
@@ -222,7 +223,15 @@ Routes are organized by functionality in `src/routes/`:
 - `/admin/discounts/delete/{discount_id}` - Delete discount (POST)
 - `/admin/discounts/toggle/{discount_id}` - Toggle discount active/inactive status (POST)
 
-Both route modules are registered in `main.py` via `setup_main_routes(app, data_db, admin_db, sync_service, config)` and `setup_admin_routes(app, data_db, admin_db)`.
+**Admin Authentication:**
+All admin routes are protected by whitelist-based authentication (`src/auth.py`):
+- Checks if logged-in athlete's ID is in `ADMIN_ATHLETE_IDS` environment variable
+- Non-authenticated users are redirected to `/login`
+- Authenticated non-admins receive a 403 Forbidden response
+- Admin status is checked on every request (no caching)
+- Changes to admin list require application restart
+
+Both route modules are registered in `main.py` via `setup_main_routes(app, data_db, admin_db, sync_service, config)` and `setup_admin_routes(app, data_db, admin_db, config)`.
 
 ### Activity Sync Service
 
@@ -500,6 +509,15 @@ In `get_activities_filtered()`, these fields are extracted and added to each act
    - Dashboard template expects `summary.stats` with: `total_activities`, `total_distance`, `total_moving_time`
    - Dashboard template expects `activity_filter_days` to display the time period in the stats title
    - Templates use external CSS (no inline `<style>` blocks)
+
+10. **Admin Access Management:**
+   - Admin access is controlled via the `ADMIN_ATHLETE_IDS` environment variable (comma-separated list)
+   - To grant admin access: add athlete's Strava ID to the list and restart the application
+   - To find athlete IDs: check the `athletes` table in the database or inspect session data
+   - All `/admin` routes are protected by `require_admin()` function from `src/auth.py`
+   - Non-admins attempting to access admin routes receive a 403 Forbidden response
+   - Empty `ADMIN_ATHLETE_IDS` means no one has admin access (secure default)
+   - Changes to the admin list require application restart to take effect
 
 ## Separation of Concerns
 

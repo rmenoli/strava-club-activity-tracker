@@ -29,6 +29,14 @@ class Config:
         )
         self.SECRET_KEY: str = os.getenv("SECRET_KEY", "dev-secret")
 
+        # Admin configuration - comma-separated list of Strava athlete IDs
+        admin_ids_str = os.getenv("ADMIN_ATHLETE_IDS", "")
+        self.ADMIN_ATHLETE_IDS: list[str] = (
+            [aid.strip() for aid in admin_ids_str.split(",") if aid.strip()]
+            if admin_ids_str
+            else []
+        )
+
     def _get_required(self, key: str) -> str:
         """Get a required environment variable.
 
@@ -72,6 +80,7 @@ def load_config() -> Config:
             "  - STRAVA_REDIRECT_URI (optional, defaults to http://localhost:8000/auth/strava/callback)"
         )
         print("  - SECRET_KEY (optional, defaults to 'dev-secret')")
+        print("  - ADMIN_ATHLETE_IDS (optional, comma-separated list of admin athlete IDs)")
         print("\nCopy .env-example to .env and fill in the values.")
         print("=" * 60)
         sys.exit(1)

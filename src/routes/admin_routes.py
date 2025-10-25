@@ -8,6 +8,8 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
+from src.auth import require_admin
+from src.config import Config
 from src.databases.admin_database import AdminDatabase
 from src.databases.strava_data_database import StravaDataDatabase
 
@@ -15,13 +17,16 @@ templates = Jinja2Templates(directory="templates")
 
 
 def setup_admin_routes(
-    app: FastAPI, data_db: StravaDataDatabase, admin_db: AdminDatabase
+    app: FastAPI, data_db: StravaDataDatabase, admin_db: AdminDatabase, config: Config
 ) -> None:
     """Setup admin routes"""
 
     @app.get("/admin")
     async def admin_dashboard(request: Request):
         """Admin dashboard showing all athletes (for development)."""
+        if auth_response := require_admin(request, config):
+            return auth_response
+
         athletes = data_db.get_all_athletes()
 
         # Add sync status calculation for each athlete
@@ -54,6 +59,9 @@ def setup_admin_routes(
     @app.get("/admin/date-filters")
     async def admin_date_filters(request: Request):
         """Admin page for managing date-based location filters."""
+        if auth_response := require_admin(request, config):
+            return auth_response
+
         date_filters = admin_db.get_all_date_location_filters()
         default_location = admin_db.get_location_settings()
 
@@ -69,6 +77,9 @@ def setup_admin_routes(
     @app.post("/admin/date-filters/add")
     async def add_date_filter(request: Request):
         """Add a new date-based location filter."""
+        if auth_response := require_admin(request, config):
+            return auth_response
+
         form_data = await request.form()
 
         try:
@@ -109,8 +120,11 @@ def setup_admin_routes(
             """)
 
     @app.post("/admin/date-filters/delete/{filter_date}")
-    async def delete_date_filter(filter_date: str):
+    async def delete_date_filter(request: Request, filter_date: str):
         """Delete a date-based location filter."""
+        if auth_response := require_admin(request, config):
+            return auth_response
+
         try:
             admin_db.delete_date_location_filter(filter_date)
             return HTMLResponse(f"""
@@ -125,13 +139,19 @@ def setup_admin_routes(
             """)
 
     @app.get("/api/date-filters")
-    async def get_date_filters():
+    async def get_date_filters(request: Request):
         """API endpoint to get all date-based location filters."""
+        if auth_response := require_admin(request, config):
+            return auth_response
+
         return admin_db.get_all_date_location_filters()
 
     @app.get("/admin/settings")
     async def admin_settings(request: Request):
         """Admin page for managing general settings."""
+        if auth_response := require_admin(request, config):
+            return auth_response
+
         activity_filter_days = admin_db.get_activity_filter_days()
         discount_threshold = admin_db.get_discount_threshold()
 
@@ -147,6 +167,9 @@ def setup_admin_routes(
     @app.post("/admin/settings/update")
     async def update_settings(request: Request):
         """Update general settings."""
+        if auth_response := require_admin(request, config):
+            return auth_response
+
         form_data = await request.form()
 
         try:
@@ -179,6 +202,9 @@ def setup_admin_routes(
     @app.get("/admin/discounts")
     async def admin_discounts(request: Request):
         """Admin page for managing discounts."""
+        if auth_response := require_admin(request, config):
+            return auth_response
+
         discounts = admin_db.get_all_discounts()
 
         return templates.TemplateResponse(
@@ -192,6 +218,9 @@ def setup_admin_routes(
     @app.post("/admin/discounts/add")
     async def add_discount(request: Request):
         """Add a new discount."""
+        if auth_response := require_admin(request, config):
+            return auth_response
+
         form_data = await request.form()
 
         try:
@@ -222,8 +251,11 @@ def setup_admin_routes(
             """)
 
     @app.post("/admin/discounts/delete/{discount_id}")
-    async def delete_discount(discount_id: int):
+    async def delete_discount(request: Request, discount_id: int):
         """Delete a discount."""
+        if auth_response := require_admin(request, config):
+            return auth_response
+
         try:
             admin_db.delete_discount(discount_id)
             return HTMLResponse(f"""
@@ -238,8 +270,11 @@ def setup_admin_routes(
             """)
 
     @app.post("/admin/discounts/toggle/{discount_id}")
-    async def toggle_discount(discount_id: int):
+    async def toggle_discount(request: Request, discount_id: int):
         """Toggle the active status of a discount."""
+        if auth_response := require_admin(request, config):
+            return auth_response
+
         try:
             admin_db.toggle_discount_status(discount_id)
             return HTMLResponse(f"""

@@ -31,4 +31,4 @@ app.add_middleware(
 
 # Setup routes
 setup_main_routes(app, data_db, admin_db, sync_service, config)
-setup_admin_routes(app, data_db, admin_db)
+setup_admin_routes(app, data_db, admin_db, config)

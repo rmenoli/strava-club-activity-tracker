@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: strava_tracker_db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-strava_tracker}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - strava_network
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: strava_tracker_app
+    ports:
+      - "80:8000"
+      - "8000:8000"
+    environment:
+      # Database connection (uses service name 'postgres' as hostname)
+      DATABASE_URL: ${DATABASE_URL}
+
+      # Strava OAuth credentials
+      STRAVA_CLIENT_ID: ${STRAVA_CLIENT_ID}
+      STRAVA_CLIENT_SECRET: ${STRAVA_CLIENT_SECRET}
+      STRAVA_REDIRECT_URI: ${STRAVA_REDIRECT_URI}
+
+      # Security
+      SECRET_KEY: ${SECRET_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - strava_network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/').read()"]
+      interval: 30s
+      timeout: 3s
+      start_period: 40s
+      retries: 3
+
+volumes:
+  postgres_data:
+
+networks:
+  strava_network:
+    driver: bridge
